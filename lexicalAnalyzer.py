@@ -295,8 +295,12 @@ def check_membership(afn, s):
                 if attributes['label'] == symbol:
                     #Si la etiqueta coincide con el símbolo, agregar el cierre épsilon del sucesor a los estados siguientes
                     next_states |= epsilon_closure(afn, {successor})
+                    print("Estado actual: ",state)
+                    print("Posibles caminos: ",afn[state])
+                    print("Lee simbolo: ",symbol)
             #Actualizar los estados actuales con los siguientes estados
-            current_states = next_states
+            if symbol != '*':
+                current_states = next_states
     #Verificar si algún estado actual es un estado de aceptación
     return any(state in afn.graph['accept'] for state in current_states)
 

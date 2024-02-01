@@ -73,10 +73,6 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
      else: #Si hay uno, lo muestra en pantalla.
          return ''.join(output_queue)
 
-expression = input("Enter your infix expression: ") #Entrada para colocar la expresión en infix.
-postfix_expression = shunting_yard(expression) #Se declara postfix_expression para el método shunting yard para ejecutar el algoritmo.
-print("Postfix expression:", postfix_expression) #Mensaje de salida con la expresión transformada a postfix.
-
 #Algoritmo de Thompson para convertir una expresión postfix en un AFN.
 
 def is_letter_or_digit(char):
@@ -272,54 +268,6 @@ def check_membership(afn, s):
                 current_states = next_states
     return any (state in afn.graph['accept'] for state in current_states)
 
-if __name__ == "__main__":
-
-    regex = input("Enter a regular expression: ")
-    w = input("Enter a string to check: ")
-
-    afn, accept_state = regex_to_afn(regex,0)
-    print("afn edges",afn.edges(data='label'))
-
-    # Obtener el conjunto de símbolos
-    simbolos = set(label for _, _, label in afn.edges(data='label'))
-
-    # Obtener el conjunto de estados iniciales
-    estados_iniciales = {nodo for nodo in afn.nodes() if len(list(afn.predecessors(nodo))) == 0}
-    estados_aceptacion = {nodo for nodo in afn.nodes() if len(list(afn.successors(nodo))) == 0}
-
-    # Visualization
-    pos = nx.spring_layout(afn, seed=42)
-    labels = {edge: afn[edge[0]][edge[1]]['label'] for edge in afn.edges()}
-    nx.draw_networkx_nodes(afn, pos)
-    nx.draw_networkx_edges(afn, pos)
-    nx.draw_networkx_edge_labels(afn, pos, edge_labels=labels)
-    nx.draw_networkx_labels(afn, pos)
-
-    plt.title("AFN Visualization")
-    plt.axis("off")
-    plt.figure(figsize=(30, 30))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
-    plt.show()
-
-    # Nombre del archivo de salida
-    nombre_archivo = "descripcion_afn.txt"
-
-    # Crear y escribir en el archivo de texto
-    with open(nombre_archivo, "w") as archivo:
-        archivo.write("ESTADOS = " + str(afn.nodes) + "\n")
-        archivo.write("SIMBOLOS = " + str(simbolos) + "\n")
-        archivo.write("INICIO = " + str(estados_iniciales) + "\n")
-        archivo.write("ACEPTACION =" + str(accept_state) + "\n")
-        archivo.write("TRANSICIONES =" + str(afn.edges(data='label')))
-
-    print(f"Se ha creado el archivo '{nombre_archivo}' con la descripción del AFN.")
-    #SIMULACION DEL AFN
-    result = check_membership(afn, w)
-
-    if result:
-        print(f"'{w}' pertenece al lenguaje L({regex})")
-    else:
-        print(f"'{w}' no pertenece al lenguaje L({regex})")
-
 #Algoritmo de Construcción de Subconjuntos para convertir un AFN en un AFD.
 
 def afn_to_afd(afn):
@@ -359,87 +307,6 @@ def afn_to_afd(afn):
     dfa.graph['accept'] = dfa_accept_states
     #print("nodes:",dfa.edges)
     return dfa
-
-if __name__ == "__main__":
-  #AFD
-    w = input("Enter a string to check: ")
-
-    #Convierte el afd a afn
-    afd = afn_to_afd(afn)
-    # Elimina el estado final vacío '()' y sus aristas del AFD
-    if ((), ()) in afd.nodes:
-        afd.remove_node(((), ()))
-
-        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
-        for source, target in list(afd.edges):
-            if target == ((), ()):
-                afd.remove_edge(source, target)
-
-    # Filtrar las aristas que no tienen tuplas vacías en ambos extremos
-
-
-    filtered_edges = [(source, target, label) for source, target, label in afd.edges(data='label') if source != () and target != ()]
-
-    # Filtrar los nodos que no son tuplas vacías
-    filtered_nodes = [node for node in afd.nodes if node != ()]
-
-
-    #print("nodes:",afd.nodes)
-
-    simbolos = set(label for _, _, label in afd.edges(data='label'))
-    # Obtener el conjunto de estados iniciales
-    estados_iniciales = {nodo for nodo in filtered_nodes if len(list(afd.predecessors(nodo))) == 0}
-
-    estados_aceptacion = set()
-    for nodo in filtered_nodes:
-      aceptacion = True
-      for succ in afd.successors(nodo):
-          if succ not in filtered_nodes or succ == ():
-              aceptacion = False
-              break
-      if aceptacion:
-          estados_aceptacion.add(nodo)
-
-
-    G = nx.DiGraph()
-
-    # Agregar nodos a filtered_graph
-    for source, target, label in filtered_edges:
-        G.add_node(source)
-        G.add_node(target)
-        G.add_edge(source, target, label=label)
-        #print("grafo G:", G )
-
-    # Obtener las posiciones de los nodos para el dibujo
-    pos = nx.spring_layout(G)
-
-    # Dibujar los nodos y las aristas
-    labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
-    nx.draw(G, pos, with_labels=True, node_size=800, node_color='lightblue')
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
-    plt.title("AFD Visualization")
-    plt.figure(figsize=(18, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
-    plt.show()
-
-    # Nombre del archivo de salida
-    nombre_archivo = "descripcion_afd.txt"
-
-
-    # Crear y escribir en el archivo de texto
-    with open(nombre_archivo, "w") as archivo:
-        archivo.write("ESTADOS = " + str(filtered_nodes) + "\n")
-        archivo.write("SIMBOLOS = " + str(simbolos) + "\n")
-        archivo.write("INICIO = " + str(estados_iniciales) + "\n")
-        archivo.write("ACEPTACION =" + str(estados_aceptacion) + "\n")
-        archivo.write("TRANSICIONES =" + str(filtered_edges))
-
-    #SIMULACION DEL AFD
-    result = check_membership(afd, w)
-
-    if result:
-        print(f"'{w}' belongs to L({regex})")
-    else:
-        print(f"'{w}' does not belong to L({regex})")
 
 #Algoritmo de Construcción Directa para convertir una regex en un AFD.
 
@@ -519,10 +386,114 @@ def remove_unreachable_states(dfa):
     unreachable_states = set(dfa.nodes) - reachable_states
     dfa.remove_nodes_from(unreachable_states)
 
+#Algoritmo para minimizar un AFD hecho por construcción directa.
+
+
+
+#Simulación:
+
 if __name__ == "__main__":
-    # AFD
+
+    expression = input("Enter your infix expression: ") #Entrada para colocar la expresión en infix.
+    postfix_expression = shunting_yard(expression) #Se declara postfix_expression para el método shunting yard para ejecutar el algoritmo.
+    print("Postfix expression:", postfix_expression) #Mensaje de salida con la expresión transformada a postfix.
+
+    regex = input("Enter a regular expression: ")
     w = input("Enter a string to check: ")
 
+    afn, accept_state = regex_to_afn(regex,0)
+    print("afn edges",afn.edges(data='label'))
+
+    # Obtener el conjunto de símbolos
+    simbolos = set(label for _, _, label in afn.edges(data='label'))
+
+    # Obtener el conjunto de estados iniciales
+    estados_iniciales = {nodo for nodo in afn.nodes() if len(list(afn.predecessors(nodo))) == 0}
+    estados_aceptacion = {nodo for nodo in afn.nodes() if len(list(afn.successors(nodo))) == 0}
+
+    # Visualization
+    pos = nx.spring_layout(afn, seed=42)
+    labels = {edge: afn[edge[0]][edge[1]]['label'] for edge in afn.edges()}
+    nx.draw_networkx_nodes(afn, pos)
+    nx.draw_networkx_edges(afn, pos)
+    nx.draw_networkx_edge_labels(afn, pos, edge_labels=labels)
+    nx.draw_networkx_labels(afn, pos)
+
+    plt.title("AFN Visualization")
+    plt.axis("off")
+    plt.figure(figsize=(30, 30))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.show()
+
+    #SIMULACION DEL AFN
+    result = check_membership(afn, w)
+
+    if result:
+        print(f"'{w}' pertenece al lenguaje L({regex})")
+    else:
+        print(f"'{w}' no pertenece al lenguaje L({regex})")
+    
+    #Convierte el afd a afn
+    afd = afn_to_afd(afn)
+    # Elimina el estado final vacío '()' y sus aristas del AFD
+    if ((), ()) in afd.nodes:
+        afd.remove_node(((), ()))
+
+        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
+        for source, target in list(afd.edges):
+            if target == ((), ()):
+                afd.remove_edge(source, target)
+
+    # Filtrar las aristas que no tienen tuplas vacías en ambos extremos
+
+
+    filtered_edges = [(source, target, label) for source, target, label in afd.edges(data='label') if source != () and target != ()]
+
+    # Filtrar los nodos que no son tuplas vacías
+    filtered_nodes = [node for node in afd.nodes if node != ()]
+
+    simbolos = set(label for _, _, label in afd.edges(data='label'))
+    # Obtener el conjunto de estados iniciales
+    estados_iniciales = {nodo for nodo in filtered_nodes if len(list(afd.predecessors(nodo))) == 0}
+
+    estados_aceptacion = set()
+    for nodo in filtered_nodes:
+      aceptacion = True
+      for succ in afd.successors(nodo):
+          if succ not in filtered_nodes or succ == ():
+              aceptacion = False
+              break
+      if aceptacion:
+          estados_aceptacion.add(nodo)
+
+
+    G = nx.DiGraph()
+
+    # Agregar nodos a filtered_graph
+    for source, target, label in filtered_edges:
+        G.add_node(source)
+        G.add_node(target)
+        G.add_edge(source, target, label=label)
+        #print("grafo G:", G )
+
+    # Obtener las posiciones de los nodos para el dibujo
+    pos = nx.spring_layout(G)
+
+    # Dibujar los nodos y las aristas
+    labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
+    nx.draw(G, pos, with_labels=True, node_size=800, node_color='lightblue')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
+    plt.title("AFD Visualization")
+    plt.figure(figsize=(18, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.show()
+
+    #SIMULACION DEL AFD
+    result = check_membership(afd, w)
+
+    if result:
+        print(f"'{w}' pertenece al lenguaje L({regex})")
+    else:
+        print(f"'{w}' no pertenece al lenguaje L({regex})")
+    
     remove_unreachable_states(afd)
 
     # Minimiza el AFD
@@ -557,27 +528,14 @@ if __name__ == "__main__":
     plt.figure(figsize=(30, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
     plt.show()
 
-
     symbols = set()
     for _, _, label in min_dfa.edges(data='label'):
             symbols.add(label)
-
-    with open('descripcion_afd_minimizado.txt', 'w') as file:
-            file.write("ESTADOS = {}\n".format(sorted(min_dfa.nodes)))
-            file.write("SIMBOLOS = {}\n".format(sorted(symbols)))
-            file.write("INICIO = {}\n".format(min_dfa.graph['start']))
-            file.write("ACEPTACION = {}\n".format(sorted(min_dfa.graph['accept'])))
-            file.write("TRANSICIONES = {}\n".format(sorted(min_dfa.edges(data='label'))))
 
     #SIMULACION DEL AFD
     result = check_membership(min_dfa, w)
 
     if result:
-        print(f"'{w}' belongs to L({regex})")
+        print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
-        print(f"'{w}' does not belong to L({regex})")
-
-
-#Algoritmo para minimizar un AFD hecho por construcción directa.
-
-
+        print(f"'{w}' no pertenece al lenguaje L({regex})")

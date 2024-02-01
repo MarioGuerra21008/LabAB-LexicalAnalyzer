@@ -322,8 +322,262 @@ if __name__ == "__main__":
 
 #Algoritmo de Construcción de Subconjuntos para convertir un AFN en un AFD.
 
+def afn_to_afd(afn):
+    start_state = afn.graph['start']
+    epsilon_closure = compute_epsilon_closure(afn, start_state)
+
+    dfa = nx.DiGraph()
+    dfa_start_state = tuple(sorted(epsilon_closure))
+    dfa.add_node(dfa_start_state)
+
+    unmarked_states = [dfa_start_state]
+
+    while unmarked_states:
+        current_dfa_state = unmarked_states.pop()
+
+        for symbol in get_alphabet(afn):
+            target_states = set()
+            for afn_state in current_dfa_state:
+                target_states.update(move(afn, afn_state, symbol))
+
+            epsilon_closure_target = set()
+            for target_state in target_states:
+                epsilon_closure_target.update(compute_epsilon_closure(afn, target_state))
+
+            dfa_target_state = tuple(sorted(epsilon_closure_target))
+
+            if dfa_target_state not in dfa:
+                unmarked_states.append(dfa_target_state)
+                dfa.add_node(dfa_target_state)
+
+            dfa.add_edge(current_dfa_state, dfa_target_state, label=symbol)
+
+    dfa.graph['start'] = dfa_start_state
+
+    # Determine accept states in DFA
+    dfa_accept_states = [state for state in dfa.nodes if any(afn_state in afn.graph['accept'] for afn_state in state)]
+    dfa.graph['accept'] = dfa_accept_states
+    #print("nodes:",dfa.edges)
+    return dfa
+
+if __name__ == "__main__":
+  #AFD
+    w = input("Enter a string to check: ")
+
+    #Convierte el afd a afn
+    afd = afn_to_afd(afn)
+    # Elimina el estado final vacío '()' y sus aristas del AFD
+    if ((), ()) in afd.nodes:
+        afd.remove_node(((), ()))
+
+        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
+        for source, target in list(afd.edges):
+            if target == ((), ()):
+                afd.remove_edge(source, target)
+
+    # Filtrar las aristas que no tienen tuplas vacías en ambos extremos
+
+
+    filtered_edges = [(source, target, label) for source, target, label in afd.edges(data='label') if source != () and target != ()]
+
+    # Filtrar los nodos que no son tuplas vacías
+    filtered_nodes = [node for node in afd.nodes if node != ()]
+
+
+    #print("nodes:",afd.nodes)
+
+    simbolos = set(label for _, _, label in afd.edges(data='label'))
+    # Obtener el conjunto de estados iniciales
+    estados_iniciales = {nodo for nodo in filtered_nodes if len(list(afd.predecessors(nodo))) == 0}
+
+    estados_aceptacion = set()
+    for nodo in filtered_nodes:
+      aceptacion = True
+      for succ in afd.successors(nodo):
+          if succ not in filtered_nodes or succ == ():
+              aceptacion = False
+              break
+      if aceptacion:
+          estados_aceptacion.add(nodo)
+
+
+    G = nx.DiGraph()
+
+    # Agregar nodos a filtered_graph
+    for source, target, label in filtered_edges:
+        G.add_node(source)
+        G.add_node(target)
+        G.add_edge(source, target, label=label)
+        #print("grafo G:", G )
+
+    # Obtener las posiciones de los nodos para el dibujo
+    pos = nx.spring_layout(G)
+
+    # Dibujar los nodos y las aristas
+    labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
+    nx.draw(G, pos, with_labels=True, node_size=800, node_color='lightblue')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
+    plt.title("AFD Visualization")
+    plt.figure(figsize=(18, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.show()
+
+    # Nombre del archivo de salida
+    nombre_archivo = "descripcion_afd.txt"
+
+
+    # Crear y escribir en el archivo de texto
+    with open(nombre_archivo, "w") as archivo:
+        archivo.write("ESTADOS = " + str(filtered_nodes) + "\n")
+        archivo.write("SIMBOLOS = " + str(simbolos) + "\n")
+        archivo.write("INICIO = " + str(estados_iniciales) + "\n")
+        archivo.write("ACEPTACION =" + str(estados_aceptacion) + "\n")
+        archivo.write("TRANSICIONES =" + str(filtered_edges))
+
+    #SIMULACION DEL AFD
+    result = check_membership(afd, w)
+
+    if result:
+        print(f"'{w}' belongs to L({regex})")
+    else:
+        print(f"'{w}' does not belong to L({regex})")
+
 #Algoritmo de Construcción Directa para convertir una regex en un AFD.
 
+
+
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
-        
+
+def hopcroft_minimization(dfa):
+    # Inicialización
+    partitions = [dfa.graph['accept'], list(set(dfa.nodes) - set(dfa.graph['accept']))]
+    worklist = deque([dfa.graph['accept']])
+
+    while worklist:
+        partition = worklist.popleft()
+
+        for symbol in get_alphabet(dfa):
+            # Dividir la partición actual en subparticiones
+            divided_partitions = []
+            for p in partitions:
+                divided = set()
+                for state in p:
+                    successors = set(dfa.successors(state))
+                    if symbol in [dfa.edges[(state, succ)]['label'] for succ in successors]:
+                        divided.add(state)
+                if divided:
+                    divided_partitions.append(divided)
+                    if len(divided) < len(p):
+                        divided_partitions.append(list(set(p) - divided))
+
+            if len(divided_partitions) > len(partitions):
+                # Comprueba si la partición actual todavía está en la lista antes de eliminarla
+                if partition in partitions:
+                  partitions.remove(partition)
+                partitions.extend(divided_partitions)
+                worklist.extend(divided_partitions)
+
+    # Construir el AFD minimizado
+    min_dfa = nx.DiGraph()
+    state_mapping = {}  # Mapeo de estados originales a estados minimizados
+
+    for i, partition in enumerate(partitions):
+        if partition:
+            min_state = ', '.join(sorted(str(state) for state in partition))  # Nuevo nombre de estado como contenido de los estados
+            state_mapping.update({state: min_state for state in partition})
+
+    for source, target, label in dfa.edges(data='label'):
+        min_source = state_mapping[source]
+        min_target = state_mapping[target]
+        min_dfa.add_edge(min_source, min_target, label=label)
+
+    min_dfa.graph['start'] = state_mapping[dfa.graph['start']]
+    min_dfa.graph['accept'] = [state_mapping[state] for state in dfa.graph['accept'] if state in state_mapping]
+
+    # Elimina el estado final vacío '()' y sus aristas del AFD
+    if '()' in min_dfa.nodes:
+        min_dfa.remove_node('()')
+
+        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
+        for source, target in list(min_dfa.edges):
+            if target == '()':
+                min_dfa.remove_edge(source, target)
+
+    return min_dfa
+
+def remove_unreachable_states(dfa):
+    # Realiza un análisis de alcanzabilidad desde el estado inicial del DFA
+    reachable_states = set()
+    stack = [dfa.graph['start']]
+
+    while stack:
+        state = stack.pop()
+        if state not in reachable_states:
+            reachable_states.add(state)
+            stack.extend(successor for successor in dfa.successors(state))
+
+    # Elimina los estados inalcanzables y las transiciones asociadas
+    unreachable_states = set(dfa.nodes) - reachable_states
+    dfa.remove_nodes_from(unreachable_states)
+
+if __name__ == "__main__":
+    # AFD
+    w = input("Enter a string to check: ")
+
+    remove_unreachable_states(afd)
+
+    # Minimiza el AFD
+    min_dfa = hopcroft_minimization(afd)
+
+    # Elimina el estado final vacío '()' y sus aristas del AFD minimizado
+    if '()' in min_dfa.nodes:
+        min_dfa.remove_node('()')
+
+        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
+        for source, target in list(min_dfa.edges):
+            if target == '()':
+                min_dfa.remove_edge(source, target)
+
+    # Dibujar el AFD minimizado
+    G_min = nx.DiGraph()
+
+    # Agregar nodos y aristas al grafo minimizado
+    for source, target, label in min_dfa.edges(data='label'):
+        G_min.add_node(source)
+        G_min.add_node(target)
+        G_min.add_edge(source, target, label=label)
+
+    # Obtener las posiciones de los nodos para el dibujo
+    pos_min = nx.spring_layout(G_min)
+
+    # Dibujar los nodos y las aristas del AFD minimizado, evitando las transiciones vacías
+    labels_min = {edge: label for edge, label in nx.get_edge_attributes(G_min, 'label').items() if label != ' '}
+    nx.draw(G_min, pos_min, with_labels=True, node_size=800, node_color='lightblue')
+    nx.draw_networkx_edge_labels(G_min, pos_min, edge_labels=labels_min)
+    plt.title("Minimized DFA Visualization")
+    plt.figure(figsize=(30, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.show()
+
+
+    symbols = set()
+    for _, _, label in min_dfa.edges(data='label'):
+            symbols.add(label)
+
+    with open('descripcion_afd_minimizado.txt', 'w') as file:
+            file.write("ESTADOS = {}\n".format(sorted(min_dfa.nodes)))
+            file.write("SIMBOLOS = {}\n".format(sorted(symbols)))
+            file.write("INICIO = {}\n".format(min_dfa.graph['start']))
+            file.write("ACEPTACION = {}\n".format(sorted(min_dfa.graph['accept'])))
+            file.write("TRANSICIONES = {}\n".format(sorted(min_dfa.edges(data='label'))))
+
+    #SIMULACION DEL AFD
+    result = check_membership(min_dfa, w)
+
+    if result:
+        print(f"'{w}' belongs to L({regex})")
+    else:
+        print(f"'{w}' does not belong to L({regex})")
+
+
 #Algoritmo para minimizar un AFD hecho por construcción directa.
+
+

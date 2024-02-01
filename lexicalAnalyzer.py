@@ -439,16 +439,15 @@ def remove_unreachable_states(dfa):
 #Simulación:
 
 if __name__ == "__main__":
-
-    expression = input("Enter your infix expression: ") #Entrada para colocar la expresión en infix.
-    postfix_expression = shunting_yard(expression) #Se declara postfix_expression para el método shunting yard para ejecutar el algoritmo.
-    print("Postfix expression:", postfix_expression) #Mensaje de salida con la expresión transformada a postfix.
+    expression = input("Enter your infix expression: ") 
+    postfix_expression = shunting_yard(expression) 
+    print("Postfix expression:", postfix_expression) 
 
     regex = input("Enter a regular expression: ")
     w = input("Enter a string to check: ")
 
-    afn, accept_state = regex_to_afn(regex,0)
-    print("afn edges",afn.edges(data='label'))
+    afn, accept_state = regex_to_afn(regex, 0)
+    print("afn edges", afn.edges(data='label'))
 
     # Obtener el conjunto de símbolos
     simbolos = set(label for _, _, label in afn.edges(data='label'))
@@ -457,33 +456,32 @@ if __name__ == "__main__":
     estados_iniciales = {nodo for nodo in afn.nodes() if len(list(afn.predecessors(nodo))) == 0}
     estados_aceptacion = {nodo for nodo in afn.nodes() if len(list(afn.successors(nodo))) == 0}
 
-    # Visualization
+    # Visualización AFN
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 3, 1)
     pos = nx.spring_layout(afn, seed=42)
     labels = {edge: afn[edge[0]][edge[1]]['label'] for edge in afn.edges()}
     nx.draw_networkx_nodes(afn, pos)
     nx.draw_networkx_edges(afn, pos)
     nx.draw_networkx_edge_labels(afn, pos, edge_labels=labels)
     nx.draw_networkx_labels(afn, pos)
-
     plt.title("AFN Visualization")
     plt.axis("off")
-    plt.figure(figsize=(30, 30))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+
     plt.show()
 
-    #SIMULACION DEL AFN
+    # SIMULACION DEL AFN
     result = check_membership(afn, w)
-
     if result:
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
-    
-    #Convierte el afd a afn
+
+    # Convierte el AFN a AFD
     afd = afn_to_afd(afn)
     # Elimina el estado final vacío '()' y sus aristas del AFD
     if ((), ()) in afd.nodes:
         afd.remove_node(((), ()))
-
         # Asegúrate de también eliminar cualquier arista que apunte a este nodo
         for source, target in list(afd.edges):
             if target == ((), ()):
@@ -500,14 +498,14 @@ if __name__ == "__main__":
 
     estados_aceptacion = set()
     for nodo in filtered_nodes:
-      aceptacion = True
-      for succ in afd.successors(nodo):
-          if succ not in filtered_nodes or succ == ():
-              aceptacion = False
-              break
-      if aceptacion:
-          estados_aceptacion.add(nodo)
-    
+        aceptacion = True
+        for succ in afd.successors(nodo):
+            if succ not in filtered_nodes or succ == ():
+                aceptacion = False
+                break
+        if aceptacion:
+            estados_aceptacion.add(nodo)
+
     G = nx.DiGraph()
 
     # Agregar nodos a filtered_graph
@@ -515,27 +513,28 @@ if __name__ == "__main__":
         G.add_node(source)
         G.add_node(target)
         G.add_edge(source, target, label=label)
-        #print("grafo G:", G )
 
     # Obtener las posiciones de los nodos para el dibujo
     pos = nx.spring_layout(G)
 
     # Dibujar los nodos y las aristas
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
     labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
     nx.draw(G, pos, with_labels=True, node_size=800, node_color='lightblue')
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
     plt.title("AFD Visualization")
-    plt.figure(figsize=(18, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.axis("off")
+
     plt.show()
 
-    #SIMULACION DEL AFD
+    # SIMULACION DEL AFD
     result = check_membership(afd, w)
-
     if result:
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
-    
+
     remove_unreachable_states(afd)
 
     # Minimiza el AFD
@@ -550,34 +549,19 @@ if __name__ == "__main__":
             if target == '()':
                 min_dfa.remove_edge(source, target)
 
-    # Dibujar el AFD minimizado
-    G_min = nx.DiGraph()
-
-    # Agregar nodos y aristas al grafo minimizado
-    for source, target, label in min_dfa.edges(data='label'):
-        G_min.add_node(source)
-        G_min.add_node(target)
-        G_min.add_edge(source, target, label=label)
-
-    # Obtener las posiciones de los nodos para el dibujo
-    pos_min = nx.spring_layout(G_min)
-
-    # Dibujar los nodos y las aristas del AFD minimizado, evitando las transiciones vacías
-    labels_min = {edge: label for edge, label in nx.get_edge_attributes(G_min, 'label').items() if label != ' '}
-    nx.draw(G_min, pos_min, with_labels=True, node_size=800, node_color='lightblue')
-    nx.draw_networkx_edge_labels(G_min, pos_min, edge_labels=labels_min)
+    # Visualización AFD minimizado
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    pos_min = nx.spring_layout(min_dfa)
+    nx.draw(min_dfa, pos_min, with_labels=True, node_size=800, node_color='lightblue')
     plt.title("Minimized DFA Visualization")
-    plt.figure(figsize=(30, 16))  # Ajusta el tamaño de la figura (ancho x alto) según tus preferencias
+    plt.axis("off")
+
     plt.show()
 
-    symbols = set()
-    for _, _, label in min_dfa.edges(data='label'):
-            symbols.add(label)
-
-    #SIMULACION DEL AFD
-    result = check_membership(min_dfa, w)
-
-    if result:
+    # SIMULACION DEL AFD MINIMIZADO
+    result_min = check_membership(min_dfa, w)
+    if result_min:
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")

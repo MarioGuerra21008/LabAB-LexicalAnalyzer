@@ -75,237 +75,283 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
 
 #Algoritmo de Thompson para convertir una expresión postfix en un AFN.
 
-def is_letter_or_digit(char):
+def is_letter_or_digit(char): #Función que sirve para detectar si es una letra o un dígito en la expresión regular.
     return 'a' <= char <= 'z' or 'A' <= char <= 'Z' or '0' <= char <= '9'
 
 def regex_to_afn(regex,index):
+    #Convertir la expresión regular a notación postfix
     postfix = shunting_yard(regex)
-    stack = []
-    accept_state = []
-    state_count = 0
-    previous_symbol = None
-    print(index)
+
+    #Inicialización de variables
+    stack = []  #Pila para mantener un seguimiento de los estados
+    accept_state = []  #Lista de estados de aceptación
+    state_count = 0  #Contador de estados
+    previous_symbol = None  #Símbolo anterior en el proceso
+
+    #Crear un grafo dirigido para representar el AFN
     afn = nx.DiGraph()
     afn.add_node(state_count)
-    start_state = state_count
-
-    epsilon_state = state_count + 1
+    start_state = state_count  #Estado inicial del AFN
+    epsilon_state = state_count + 1  #Estado de transición épsilon
     afn.add_node(epsilon_state)
-    afn.add_edge(state_count, epsilon_state, label='ε')
+    afn.add_edge(state_count, epsilon_state, label='ε')  #Transición épsilon desde el estado inicial
     state_count += 1
-
-    # Mantén un seguimiento de los estados en cada nivel de alternancia
-    alt_states = [set([1])]
-    boolean = False
-    cont = 0
+    alt_states = [set([1])]  #Conjuntos de estados alternativos
+    cont = 0  #Contador auxiliar
+    
+    #Recorrer la expresión regular en notación postfix
     for symbol in postfix:
-
-        if is_letter_or_digit(symbol):
+        #Manejar los símbolos y operadores de la expresión regular
+        if is_letter_or_digit(symbol):  #Si el símbolo es una letra o un dígito
             state_count += 1
-            cont +=1
+            cont += 1
             afn.add_node(state_count)
             afn.add_edge(state_count - 1, state_count, label=symbol)
-            #print("cont",cont)
             stack.append(state_count)
-        elif symbol == '*':
+        elif symbol == '*':  #Operador de clausura de Kleene
+            #Manejar la clausura de Kleene
             state = stack.pop()
-            char = regex[state - 2]
+            char = regex[state - 2]  #Obtener el carácter anterior al estado actual
 
+            #Ajustar el carácter dependiendo del contexto
             if char == '(':
-              char = regex[state - 1]
+                char = regex[state - 1]
             elif char == '*':
-              char = regex[state - 7]
+                char = regex[state - 7]
             elif char == 'ε':
-              char = regex[state-1]
+                char = regex[state - 1]
 
+            #Agregar transición desde el estado actual al próximo estado
             if previous_symbol != '|':
-               afn.add_edge(state, state, label=previous_symbol)
+                afn.add_edge(state, state, label=previous_symbol)
             afn.add_edge(state_count, state_count + 1, label='ε')
 
+            #Manejar la clausura de Kleene y actualizar el estado actual
             if previous_symbol == '|' and cont <= 2:
-              afn.add_edge(epsilon_state, state_count + 1, label='ε')
+                afn.add_edge(epsilon_state, state_count + 1, label='ε')
 
             epsilon_state = state_count + 2
-
             state_count += 1
             afn.add_node(state_count)
             stack.append(state_count)
 
+            #Agregar estados de aceptación
             accept_state += [state]
             accept_state += [state - 1]
 
-        elif symbol == '|':
+        elif symbol == '|':  #Operador de alternancia
+            #Manejar la alternancia de estados
             state2 = stack.pop()
             state1 = stack.pop()
-            char1 = regex[state1 - 3]
+            char1 = regex[state1 - 3]  #Obtener el carácter anterior al primer estado
+
+            #Ajustar el carácter dependiendo del contexto
             if char1 == ')':
-              char1 = regex[state1 - 1]
+                char1 = regex[state1 - 1]
             elif char1 == '*':
-              char1 = regex[state1 - 1]
-              boolean = True
+                char1 = regex[state1 - 1]
 
             if char1 == '(':
-              char1 = 'ε'
+                char1 = 'ε'
 
-            char2 = regex[state2 - 3]
+            char2 = regex[state2 - 3]  #Obtener el carácter anterior al segundo estado
             if char2 == '(':
-              char2 = regex[state2 ]
+                char2 = regex[state2]
 
             if char2 == char1:
-              char2 = regex[state2-2]
+                char2 = regex[state2 - 2]
             elif char2 == '*':
-              char2 == 'ε'
+                char2 == 'ε'
 
             state_count += 1
 
+            #Agregar transiciones desde el estado épsilon a los estados alternativos
             if cont >= 3:
-              afn.add_edge(epsilon_state+(cont-2), state1, label=char1)
-              afn.add_edge(epsilon_state+(cont-2), state2, label=char2)
-
+                afn.add_edge(epsilon_state + (cont - 2), state1, label=char1)
+                afn.add_edge(epsilon_state + (cont - 2), state2, label=char2)
             else:
-              afn.add_edge(epsilon_state, state1, label=char1)
-              afn.add_edge(epsilon_state, state2, label=char2)
-            print("num: ",cont)
+                afn.add_edge(epsilon_state, state1, label=char1)
+                afn.add_edge(epsilon_state, state2, label=char2)
+            print("num: ", cont)
 
+            #Actualizar el siguiente símbolo en el proceso
             if index + 1 < len(postfix):
-              sig = postfix[index+1]
+                sig = postfix[index + 1]
             else:
-              sig = None
+                sig = None
 
+            #Agregar transiciones desde los estados a un nuevo estado
             afn.add_edge(state1, state_count + 1, label='ε')
             afn.add_edge(state2, state_count + 1, label='ε')
 
             if sig == '*':
-                #Transiciones Reflexivas
                 afn.add_edge(state_count + 1, state1 - 1, label='ε')
-                #afn.add_edge(state2, state2, label=char2)
-
-
             state_count += 1
-            # Verifica si la arista existe antes de intentar eliminarla
             if afn.has_edge(state1, state2):
                 afn.remove_edge(state1, state2)
-            #afn.remove_edge(state1,state2)
-            #afn.add_node(state_count)
             stack.append(state_count)
-        elif symbol == '.':
+        elif symbol == '.':  #Operador de concatenación
             state2 = stack.pop()
             state1 = stack.pop()
             stack.append(state2)
         index += 1
-        previous_symbol = symbol
-    final_state = state_count +1
+        previous_symbol = symbol  #Actualizar el símbolo anterior en el proceso
+    
+    #Establecer el estado final y los estados de aceptación
+    final_state = state_count + 1
     accept_state += [final_state]
-    #print("Estados de aceptacion: ",accept_state)
     afn.add_node(final_state)
     afn.add_edge(state_count, final_state, label='ε')
 
+    #Establecer el estado inicial y los estados de aceptación en el grafo
     afn.graph['start'] = start_state
     afn.graph['accept'] = accept_state
 
+    #Retornar el AFN generado junto con los estados de aceptación
     return afn, accept_state
 
 def compute_epsilon_closure(afn, state):
+    #Inicializar conjunto de cierre épsilon y pila con el estado inicial
     epsilon_closure = set()
     stack = [state]
 
+    #Recorrer el grafo del AFN
     while stack:
+        #Sacar un estado de la pila
         current_state = stack.pop()
+        #Agregarlo al cierre épsilon
         epsilon_closure.add(current_state)
 
+        #Recorrer los sucesores del estado actual
         for successor, edge_data in afn.adj[current_state].items():
             label = edge_data.get('label', None)
+            #Si la etiqueta es épsilon y el sucesor no está en el cierre épsilon, agregarlo a la pila
             if label == 'ε' and successor not in epsilon_closure:
                 stack.append(successor)
+    #Retornar el cierre épsilon
     return epsilon_closure
 
 def move(afn, state, symbol):
+    #Inicializar conjunto de estados destino
     target_states = set()
+    
+    #Recorrer los sucesores del estado actual
     for successor, edge_data in afn.adj[state].items():
         label = edge_data.get('label', None)
+        #Si la etiqueta coincide con el símbolo, agregar el sucesor al conjunto de estados destino
         if label == symbol:
             target_states.add(successor)
+    #Retornar los estados destino
     return target_states
 
 def get_alphabet(afn):
+    #Inicializar conjunto de símbolos del alfabeto
     alphabet = set()
+    
+    #Recorrer todas las aristas del grafo del AFN
     for _, _, label in afn.edges(data='label'):
+        #Si la etiqueta no es épsilon, agregarla al alfabeto
         if label != 'ε':
             alphabet.add(label)
+    #Retornar el alfabeto
     return alphabet
 
 def epsilon_closure(afn, states):
+    #Inicializar cierre épsilon con los estados dados y una pila
     closure = set(states)
     stack = list(states)
+    
+    #Recorrer la pila
     while stack:
         state = stack.pop()
+        #Recorrer los sucesores del estado actual
         for successor, attributes in afn[state].items():
             label = attributes['label']
+            #Si la etiqueta es épsilon y el sucesor no está en el cierre épsilon, agregarlo al cierre y a la pila
             if label == 'ε' and successor not in closure:
                 closure.add(successor)
                 stack.append(successor)
+            #Si la etiqueta es '*', agregar el sucesor al cierre y expandir su cierre épsilon
             elif label == '*':
                 closure.add(successor)
                 for epsilon_successor in epsilon_closure(afn, {successor}):
                     if epsilon_successor not in closure:
                         closure.add(epsilon_successor)
                         stack.append(epsilon_successor)
+    #Retornar el cierre épsilon
     return closure
 
 def check_membership(afn, s):
+    #Inicializar estados actuales con el cierre épsilon del estado inicial
     current_states = epsilon_closure(afn, {afn.graph['start']})
+    
+    #Recorrer los símbolos de la cadena de entrada
     for symbol in s:
         next_states = set()
-
+        #Recorrer los estados actuales
         for state in current_states:
+            #Recorrer los sucesores del estado actual
             for successor, attributes in afn[state].items():
                 if attributes['label'] == symbol:
+                    #Si la etiqueta coincide con el símbolo, agregar el cierre épsilon del sucesor a los estados siguientes
                     next_states |= epsilon_closure(afn, {successor})
-                    print("Estado actual: ",state)
-                    print("Posibles caminos: ",afn[state])
-                    print("Lee simbolo: ",symbol)
-            if symbol != '*':
-                current_states = next_states
-    return any (state in afn.graph['accept'] for state in current_states)
+            #Actualizar los estados actuales con los siguientes estados
+            current_states = next_states
+    #Verificar si algún estado actual es un estado de aceptación
+    return any(state in afn.graph['accept'] for state in current_states)
 
 #Algoritmo de Construcción de Subconjuntos para convertir un AFN en un AFD.
 
 def afn_to_afd(afn):
+    # Obtener el estado inicial del AFN
     start_state = afn.graph['start']
+    # Calcular el cierre épsilon del estado inicial
     epsilon_closure = compute_epsilon_closure(afn, start_state)
 
+    # Inicializar un grafo dirigido para representar el AFD
     dfa = nx.DiGraph()
+    # Convertir el cierre épsilon del estado inicial en una tupla ordenada
     dfa_start_state = tuple(sorted(epsilon_closure))
+    # Agregar el estado inicial al AFD
     dfa.add_node(dfa_start_state)
 
+    # Inicializar una lista de estados no marcados con el estado inicial del AFD
     unmarked_states = [dfa_start_state]
 
+    # Proceso de construcción del AFD
     while unmarked_states:
+        # Tomar un estado no marcado del AFD
         current_dfa_state = unmarked_states.pop()
 
+        # Para cada símbolo del alfabeto del AFN
         for symbol in get_alphabet(afn):
+            # Calcular los estados a los que se llega desde el estado actual del AFD utilizando el símbolo
             target_states = set()
             for afn_state in current_dfa_state:
                 target_states.update(move(afn, afn_state, symbol))
 
+            # Calcular el cierre épsilon de los estados obtenidos
             epsilon_closure_target = set()
             for target_state in target_states:
                 epsilon_closure_target.update(compute_epsilon_closure(afn, target_state))
 
+            # Convertir el cierre épsilon de los estados en una tupla ordenada
             dfa_target_state = tuple(sorted(epsilon_closure_target))
 
+            # Si el estado obtenido no está en el AFD, marcarlo como no marcado y agregarlo al AFD
             if dfa_target_state not in dfa:
                 unmarked_states.append(dfa_target_state)
                 dfa.add_node(dfa_target_state)
-
+            # Agregar una transición desde el estado actual del AFD al estado obtenido con el símbolo actual
             dfa.add_edge(current_dfa_state, dfa_target_state, label=symbol)
 
+    # Establecer el estado inicial del AFD
     dfa.graph['start'] = dfa_start_state
-
-    # Determine accept states in DFA
+    # Obtener los estados de aceptación del AFD
     dfa_accept_states = [state for state in dfa.nodes if any(afn_state in afn.graph['accept'] for afn_state in state)]
+    # Establecer los estados de aceptación del AFD
     dfa.graph['accept'] = dfa_accept_states
-    #print("nodes:",dfa.edges)
+    # Retornar el AFD construido
     return dfa
 
 #Algoritmo de Construcción Directa para convertir una regex en un AFD.
@@ -315,19 +361,20 @@ def afn_to_afd(afn):
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
 
 def hopcroft_minimization(dfa):
-    # Inicialización
+    # Inicializar particiones con estados de aceptación y no de aceptación
     partitions = [dfa.graph['accept'], list(set(dfa.nodes) - set(dfa.graph['accept']))]
+    # Inicializar una lista de trabajo con la partición de estados de aceptación
     worklist = deque([dfa.graph['accept']])
 
+    # Proceso de minimización de Hopcroft
     while worklist:
         partition = worklist.popleft()
-
         for symbol in get_alphabet(dfa):
-            # Dividir la partición actual en subparticiones
             divided_partitions = []
             for p in partitions:
                 divided = set()
                 for state in p:
+                    # Verificar si hay transiciones con el símbolo actual hacia estados en la partición
                     successors = set(dfa.successors(state))
                     if symbol in [dfa.edges[(state, succ)]['label'] for succ in successors]:
                         divided.add(state)
@@ -335,44 +382,43 @@ def hopcroft_minimization(dfa):
                     divided_partitions.append(divided)
                     if len(divided) < len(p):
                         divided_partitions.append(list(set(p) - divided))
-
+            # Actualizar las particiones si se dividen en particiones más pequeñas
             if len(divided_partitions) > len(partitions):
-                # Comprueba si la partición actual todavía está en la lista antes de eliminarla
                 if partition in partitions:
-                  partitions.remove(partition)
+                    partitions.remove(partition)
                 partitions.extend(divided_partitions)
                 worklist.extend(divided_partitions)
-
-    # Construir el AFD minimizado
+    # Crear el DFA minimizado
     min_dfa = nx.DiGraph()
-    state_mapping = {}  # Mapeo de estados originales a estados minimizados
+    state_mapping = {}
 
+    # Mapear estados a su representación en la partición
     for i, partition in enumerate(partitions):
         if partition:
-            min_state = ', '.join(sorted(str(state) for state in partition))  # Nuevo nombre de estado como contenido de los estados
+            min_state = ', '.join(sorted(str(state) for state in partition))
             state_mapping.update({state: min_state for state in partition})
 
+    # Construir las transiciones del DFA minimizado
     for source, target, label in dfa.edges(data='label'):
         min_source = state_mapping[source]
         min_target = state_mapping[target]
         min_dfa.add_edge(min_source, min_target, label=label)
 
+    # Establecer el estado inicial y los estados de aceptación del DFA minimizado
     min_dfa.graph['start'] = state_mapping[dfa.graph['start']]
     min_dfa.graph['accept'] = [state_mapping[state] for state in dfa.graph['accept'] if state in state_mapping]
 
-    # Elimina el estado final vacío '()' y sus aristas del AFD
+    # Remover nodos y aristas no alcanzables del DFA minimizado
     if '()' in min_dfa.nodes:
         min_dfa.remove_node('()')
-
-        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
         for source, target in list(min_dfa.edges):
             if target == '()':
                 min_dfa.remove_edge(source, target)
-
+    # Retornar el DFA minimizado
     return min_dfa
 
 def remove_unreachable_states(dfa):
-    # Realiza un análisis de alcanzabilidad desde el estado inicial del DFA
+    # Encontrar estados alcanzables desde el estado inicial
     reachable_states = set()
     stack = [dfa.graph['start']]
 
@@ -381,9 +427,9 @@ def remove_unreachable_states(dfa):
         if state not in reachable_states:
             reachable_states.add(state)
             stack.extend(successor for successor in dfa.successors(state))
-
-    # Elimina los estados inalcanzables y las transiciones asociadas
+    # Encontrar estados no alcanzables
     unreachable_states = set(dfa.nodes) - reachable_states
+    # Remover estados no alcanzables
     dfa.remove_nodes_from(unreachable_states)
 
 #Algoritmo para minimizar un AFD hecho por construcción directa.
@@ -443,9 +489,6 @@ if __name__ == "__main__":
             if target == ((), ()):
                 afd.remove_edge(source, target)
 
-    # Filtrar las aristas que no tienen tuplas vacías en ambos extremos
-
-
     filtered_edges = [(source, target, label) for source, target, label in afd.edges(data='label') if source != () and target != ()]
 
     # Filtrar los nodos que no son tuplas vacías
@@ -464,8 +507,7 @@ if __name__ == "__main__":
               break
       if aceptacion:
           estados_aceptacion.add(nodo)
-
-
+    
     G = nx.DiGraph()
 
     # Agregar nodos a filtered_graph

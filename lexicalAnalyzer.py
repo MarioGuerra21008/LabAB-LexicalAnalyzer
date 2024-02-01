@@ -31,6 +31,8 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
                 result.append('.')
             elif char == ')' and lookahead == '(':
                 result.append('.')
+            elif char == '?' and lookahead.isalnum():
+                result.append('.')
 
     return ''.join(result) #Devuelve el resultado.
 
@@ -47,7 +49,7 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
          token = expression[i] #El token es igual al elemento en la lista en la posición i.
          if token.isalnum() or token == 'ε': #Si el token es una letra o un dígito, o es epsilon.
              output_queue.append(token) #Se agrega a output_queue.
-         elif token in "+|*.?": #Si hay alguno de estos operadores en el token:
+         elif token in "+|*?.": #Si hay alguno de estos operadores en el token:
              while (operator_stack and operator_stack[-1] != '(' and #Se toma en cuenta la precedencia y el orden de operadores para luego añadirla al queue y a la pila.
                     precedence[token] <= precedence.get(operator_stack[-1], 0)):
                  output_queue.append(operator_stack.pop())
@@ -172,7 +174,6 @@ def regex_to_afn(regex,index):
             else:
                 afn.add_edge(epsilon_state, state1, label=char1)
                 afn.add_edge(epsilon_state, state2, label=char2)
-            print("num: ", cont)
 
             #Actualizar el siguiente símbolo en el proceso
             if index + 1 < len(postfix):
@@ -194,6 +195,17 @@ def regex_to_afn(regex,index):
             state2 = stack.pop()
             state1 = stack.pop()
             stack.append(state2)
+        elif symbol == '?':  # Operador de cero o una ocurrencia
+            # Manejar el operador '?'
+            state1 = stack.pop()
+            state2 = state_count + 1
+            afn.add_node(state2)
+            afn.add_edge(state1, state2, label='ε')  # Transición desde el estado antes del '?'
+            afn.add_edge(state1, state2 + 1, label='ε')  # Transición ε directa al siguiente estado
+            afn.add_edge(state2, state2 + 1, label=previous_symbol)  # Transición desde el estado del '?'
+            afn.add_edge(state1, state2 + 1, label='ε')
+            stack.append(state2 + 1)
+            state_count += 1
         index += 1
         previous_symbol = symbol  #Actualizar el símbolo anterior en el proceso
     
@@ -465,7 +477,7 @@ if __name__ == "__main__":
     plt.subplot(1, 3, 1)
     pos = nx.spring_layout(afn, seed=42)
     labels = {edge: afn[edge[0]][edge[1]]['label'] for edge in afn.edges()}
-    nx.draw_networkx_nodes(afn, pos)
+    nx.draw_networkx_nodes(afn, pos, node_color='blue')
     nx.draw_networkx_edges(afn, pos)
     nx.draw_networkx_edge_labels(afn, pos, edge_labels=labels)
     nx.draw_networkx_labels(afn, pos)
@@ -525,7 +537,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
     labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
-    nx.draw(G, pos, with_labels=True, node_size=800, node_color='lightblue')
+    nx.draw(G, pos, with_labels=True, node_size=200, node_color='blue')
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
     plt.title("AFD Visualization")
     plt.axis("off")
@@ -539,9 +551,9 @@ if __name__ == "__main__":
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
 
+    #Minimiza el AFD
     remove_unreachable_states(afd)
 
-    # Minimiza el AFD
     min_dfa = hopcroft_minimization(afd)
 
     # Elimina el estado final vacío '()' y sus aristas del AFD minimizado
@@ -557,7 +569,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
     pos_min = nx.spring_layout(min_dfa)
-    nx.draw(min_dfa, pos_min, with_labels=True, node_size=800, node_color='lightblue')
+    nx.draw(min_dfa, pos_min, with_labels=True, node_size=200, node_color='blue')
     plt.title("Minimized DFA Visualization")
     plt.axis("off")
 

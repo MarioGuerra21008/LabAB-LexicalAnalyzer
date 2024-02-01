@@ -21,8 +21,9 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
         if i + 1 < len(expression): #Si la expresión es menor que la cantidad de elementos en el arreglo, se coloca en la posición i + 1.
             lookahead = expression[i + 1]
 
-            if char.isalnum() and lookahead not in operators and lookahead != '.': #Si el caracter es una letra o un dígito, no está en los operadores y no es unc concatenación:
-                result.append('.') #Agrega una concatenación a la lista result.
+            if char.isalnum() or char == 'ε':
+                if lookahead not in operators and lookahead != '.': #Si el caracter es una letra o un dígito, no está en los operadores y no es unc concatenación:
+                    result.append('.') #Agrega una concatenación a la lista result.
             elif char == '*' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
                 result.append('.')
             elif char == ')' and lookahead.isalnum():

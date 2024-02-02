@@ -7,7 +7,7 @@
 #Importación de módulos y librerías para mostrar gráficamente los autómatas finitos.
 import networkx as nx
 import matplotlib.pyplot as plt
-from collections import deque
+from collections import deque, defaultdict
 
 #Algoritmo Shunting Yard para pasar una expresión infix a postfix.
 
@@ -373,6 +373,143 @@ def afn_to_afd(afn):
 
 #Algoritmo de Construcción Directa para convertir una regex en un AFD.
 
+class Nodo:
+    def __init__(self, valor):
+        self.valor = valor
+        self.nullable = False
+        self.firstpos = set()
+        self.lastpos = set()
+
+def nullable(treeDC):
+    if isinstance(treeDC, list):
+        if treeDC[0] == '.':
+            return nullable(treeDC[1]) and nullable(treeDC[2])
+        elif treeDC[0] == '*':
+            return True
+    return False
+
+def firstpos(treeDC):
+    if isinstance(treeDC, list):
+        if treeDC[0] == '.':
+            if nullable(treeDC[1]):
+                return firstpos(treeDC[1]).union(firstpos(treeDC[2]))
+            else:
+                return firstpos(treeDC[1])
+        elif treeDC[0] == '*':
+            return firstpos(treeDC[1])
+        pass
+
+def lastpos(treeDC):
+    if isinstance(treeDC, list):
+        if treeDC[0] == '.':
+            if nullable(treeDC[2]):
+                return lastpos(treeDC[1]).union(lastpos(treeDC[2]))
+            else:
+                return lastpos(treeDC[2])
+        elif treeDC[0] == '*':
+            return lastpos(treeDC[1])
+        pass
+
+
+def followpos(treeDC, followpos_dict):
+    print(treeDC)
+    if isinstance(treeDC, list) and treeDC[0] == '.':
+        for pos in lastpos(treeDC[1]):
+            followpos_dict[pos].update(firstpos(treeDC[2]))
+        followpos(treeDC[2], followpos_dict)
+    elif isinstance(treeDC, list) and treeDC[0] == '*':
+        for pos in lastpos(treeDC[1]):
+            followpos_dict[pos].update(firstpos(treeDC[1]))
+        followpos(treeDC[1], followpos_dict)
+    pass
+
+def build_nfa(regex):
+    stack = []
+    pos = 1
+    followpos_dict = defaultdict(set)
+
+    for char in regex:
+        if char == '(':
+            stack.append(char)
+        elif char == ')':
+            stack.pop()
+        elif char == '|':
+            stack.append(char)
+        elif char == '*':
+            treeDC = ('*', stack.pop())
+            nullable_val = nullable(treeDC)
+            firstpos_val = firstpos(treeDC)
+            lastpos_val = lastpos(treeDC)
+            for pos in lastpos_val:
+                followpos_dict[pos].update(firstpos_val)
+            stack.append(pos)
+            pos += 1
+        else:
+            stack.append(pos)
+            pos += 1
+
+    root = stack[0]
+
+    followpos(root, followpos_dict)
+
+    return root, followpos_dict
+
+def epsilon_closureDC(estado, followpos_dict):
+    epsilon_cerradura = set([estado])
+    stack = [estado]
+    while stack:
+        current = stack.pop()
+        for siguiente in followpos_dict[current]:
+            if siguiente not in epsilon_cerradura:
+                epsilon_cerradura.add(siguiente)
+                stack.append(siguiente)
+    return epsilon_cerradura
+
+def moveDC(epsilon_cerradura, simbolo, followpos_dict):
+    move_result = set()
+    for estado in epsilon_cerradura:
+        move_result.update(followpos_dict[estado] if estado[0] == simbolo else set())
+    return move_result
+
+def build_dfa(nfa_root, followpos_dict):
+    alfabeto = set()
+    for conjunto in followpos_dict.values():
+        alfabeto.update(conjunto)
+
+    dfa_transiciones = {}
+    estados_no_marcados = [epsilon_closureDC(nfa_root, followpos_dict)]
+    estados_marcados = []
+
+    while estados_no_marcados:
+        current = estados_no_marcados.pop()
+        estados_marcados.append(current)
+
+        for simbolo in alfabeto:
+            siguiente_estado = epsilon_closureDC(move(current, simbolo, followpos_dict), followpos_dict)
+            if siguiente_estado not in estados_marcados + estados_no_marcados:
+                estados_no_marcados.append(siguiente_estado)
+            dfa_transiciones[(tuple(current), simbolo)] = tuple(siguiente_estado)
+
+    return dfa_transiciones
+
+def visualize_dfa(dfa_transiciones):
+    G = nx.DiGraph()
+    for estado, transicion in dfa_transiciones.items():
+        G.add_edge(estado[0], transicion, label=estado[1])
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, with_labels=True, arrows=True)
+    edge_labels = {(estado, transicion): label for (estado, transicion), label in nx.get_edge_attributes(G, 'label').items()}
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.show()
+
+def mainConstruccionDirecta():
+    regex = input("Ingrese la expresión regular: ")
+    nfa_root, followpos_dict = build_nfa(regex)
+    dfa_transiciones = build_dfa(nfa_root, followpos_dict)
+    visualize_dfa(dfa_transiciones)
+    
 
 
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
@@ -582,3 +719,7 @@ if __name__ == "__main__":
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
+
+    #Construcción directa (AFD).
+    
+    mainConstruccionDirecta()

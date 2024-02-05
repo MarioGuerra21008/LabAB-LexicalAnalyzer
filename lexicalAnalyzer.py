@@ -7,13 +7,14 @@
 #Importación de módulos y librerías para mostrar gráficamente los autómatas finitos.
 import networkx as nx
 import matplotlib.pyplot as plt
-from collections import deque, defaultdict
+from collections import deque
+from collections import defaultdict
 
 #Algoritmo Shunting Yard para pasar una expresión infix a postfix.
 
 def insert_concatenation(expression): #Función insert_concatenation para poder agregar los operadores al arreglo result.
     result = [] #Lista result para agregar los operadores.
-    operators = "+|*()?" #Operadores en la lista.
+    operators = "#+|*()?" #Operadores en la lista.
     for i in range(len(expression)): #Por cada elemento según el rango de la variable expression:
         char = expression[i]
         result.append(char) #Se agrega caracter por caracter al arreglo.
@@ -26,6 +27,8 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
                     result.append('.') #Agrega una concatenación a la lista result.
             elif char == '*' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
                 result.append('.')
+            elif char == '+' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
+                result.append('.')
             elif char == ')' and lookahead.isalnum():
                 result.append('.')
             elif char.isalnum() and lookahead == '(':
@@ -34,11 +37,13 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
                 result.append('.')
             elif char == '?' and lookahead.isalnum():
                 result.append('.')
+            elif char == '#' and lookahead.isalnum():
+                result.append('.')
 
     return ''.join(result) #Devuelve el resultado.
 
 def shunting_yard(expression): #Función para realizar el algoritmo shunting yard.
-     precedence = {'+': 1, '|': 1, '.': 2, '*': 3, '?':3} # Orden de precedencia entre operadores.
+     precedence = {'#': 1,'+': 1, '|': 1, '.': 2, '*': 3, '?':3} # Orden de precedencia entre operadores.
 
      output_queue = [] #Lista de salida como notación postfix.
      operator_stack = []
@@ -50,7 +55,7 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
          token = expression[i] #El token es igual al elemento en la lista en la posición i.
          if token.isalnum() or token == 'ε': #Si el token es una letra o un dígito, o es epsilon.
              output_queue.append(token) #Se agrega a output_queue.
-         elif token in "+|*?.": #Si hay alguno de estos operadores en el token:
+         elif token in "#+|*?.": #Si hay alguno de estos operadores en el token:
              while (operator_stack and operator_stack[-1] != '(' and #Se toma en cuenta la precedencia y el orden de operadores para luego añadirla al queue y a la pila.
                     precedence[token] <= precedence.get(operator_stack[-1], 0)):
                  output_queue.append(operator_stack.pop())
@@ -436,14 +441,14 @@ def build_nfa(regex):
         elif char == '|':
             stack.append(char)
         elif char == '*':
-            treeDC = ('*', stack.pop())
+            operand = stack.pop()
+            treeDC = ('*', operand)
             nullable_val = nullable(treeDC)
             firstpos_val = firstpos(treeDC)
             lastpos_val = lastpos(treeDC)
-            for pos in lastpos_val:
-                followpos_dict[pos].update(firstpos_val)
-            stack.append(pos)
-            pos += 1
+            for p in lastpos_val:
+                followpos_dict[p].update(firstpos_val)
+            stack.append(treeDC)  # Push the treeDC back to stack
         else:
             stack.append(pos)
             pos += 1
@@ -485,7 +490,7 @@ def build_dfa(nfa_root, followpos_dict):
         estados_marcados.append(current)
 
         for simbolo in alfabeto:
-            siguiente_estado = epsilon_closureDC(move(current, simbolo, followpos_dict), followpos_dict)
+            siguiente_estado = epsilon_closureDC(moveDC(current, simbolo, followpos_dict), followpos_dict)
             if siguiente_estado not in estados_marcados + estados_no_marcados:
                 estados_no_marcados.append(siguiente_estado)
             dfa_transiciones[(tuple(current), simbolo)] = tuple(siguiente_estado)
@@ -722,4 +727,4 @@ if __name__ == "__main__":
 
     #Construcción directa (AFD).
     
-    mainConstruccionDirecta()
+    #mainConstruccionDirecta()

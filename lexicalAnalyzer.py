@@ -473,7 +473,6 @@ def build_syntax_tree(regex):
 
     return stack.pop(), nodes_calculated
 
-
 def visualize_tree(root):
     G = nx.DiGraph()
     build_networkx_graph(root, G)
@@ -505,7 +504,6 @@ def build_networkx_graph(root, G):
 
             if not current_node.left and not current_node.right:
                 G.add_node(current_node)
-
 
 def get_all_nodes(node):
     nodes = set()
@@ -581,11 +579,7 @@ def followpos(node):
             for fp in firstpos(node.left):
                 follow_pos[pos].update(fp)
     elif node.value == '?':
-        pass  # No se necesita hacer nada para operador opcional
-
-def mainConstruccionDirecta():
-    regex = input("Ingrese la expresión regular: ")
-    
+        pass  # No se necesita hacer nada para operador opcional    
 
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
 

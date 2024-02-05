@@ -7,6 +7,7 @@
 #Importación de módulos y librerías para mostrar gráficamente los autómatas finitos.
 import networkx as nx
 import matplotlib.pyplot as plt
+from networkx.drawing.nx_agraph import graphviz_layout
 from collections import deque
 from collections import defaultdict
 
@@ -26,8 +27,6 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
                 if lookahead not in operators and lookahead != '.': #Si el caracter es una letra o un dígito, no está en los operadores y no es unc concatenación:
                     result.append('.') #Agrega una concatenación a la lista result.
             elif char == '*' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
-                result.append('.')
-            elif char == '+' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
                 result.append('.')
             elif char == ')' and lookahead.isalnum():
                 result.append('.')
@@ -55,7 +54,7 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
          token = expression[i] #El token es igual al elemento en la lista en la posición i.
          if token.isalnum() or token == 'ε': #Si el token es una letra o un dígito, o es epsilon.
              output_queue.append(token) #Se agrega a output_queue.
-         elif token in "#+|*?.": #Si hay alguno de estos operadores en el token:
+         elif token in "+|*?.#": #Si hay alguno de estos operadores en el token:
              while (operator_stack and operator_stack[-1] != '(' and #Se toma en cuenta la precedencia y el orden de operadores para luego añadirla al queue y a la pila.
                     precedence[token] <= precedence.get(operator_stack[-1], 0)):
                  output_queue.append(operator_stack.pop())
@@ -378,144 +377,215 @@ def afn_to_afd(afn):
 
 #Algoritmo de Construcción Directa para convertir una regex en un AFD.
 
-class Nodo:
-    def __init__(self, valor):
-        self.valor = valor
-        self.nullable = False
-        self.firstpos = set()
-        self.lastpos = set()
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.left = None
+        self.right = None
 
-def nullable(treeDC):
-    if isinstance(treeDC, list):
-        if treeDC[0] == '.':
-            return nullable(treeDC[1]) and nullable(treeDC[2])
-        elif treeDC[0] == '*':
-            return True
-    return False
-
-def firstpos(treeDC):
-    if isinstance(treeDC, list):
-        if treeDC[0] == '.':
-            if nullable(treeDC[1]):
-                return firstpos(treeDC[1]).union(firstpos(treeDC[2]))
-            else:
-                return firstpos(treeDC[1])
-        elif treeDC[0] == '*':
-            return firstpos(treeDC[1])
-        pass
-
-def lastpos(treeDC):
-    if isinstance(treeDC, list):
-        if treeDC[0] == '.':
-            if nullable(treeDC[2]):
-                return lastpos(treeDC[1]).union(lastpos(treeDC[2]))
-            else:
-                return lastpos(treeDC[2])
-        elif treeDC[0] == '*':
-            return lastpos(treeDC[1])
-        pass
-
-
-def followpos(treeDC, followpos_dict):
-    print(treeDC)
-    if isinstance(treeDC, list) and treeDC[0] == '.':
-        for pos in lastpos(treeDC[1]):
-            followpos_dict[pos].update(firstpos(treeDC[2]))
-        followpos(treeDC[2], followpos_dict)
-    elif isinstance(treeDC, list) and treeDC[0] == '*':
-        for pos in lastpos(treeDC[1]):
-            followpos_dict[pos].update(firstpos(treeDC[1]))
-        followpos(treeDC[1], followpos_dict)
-    pass
-
-def build_nfa(regex):
+def build_syntax_tree(regex):
+    regex_postfix = shunting_yard(regex + '#')  # Convertir la expresión regular a formato postfix con '#' al final
     stack = []
-    pos = 1
-    followpos_dict = defaultdict(set)
+    nodes_calculated = set()  # Conjunto para rastrear qué nodos ya han sido calculados
+    position_counter = 1  # Contador para asignar números de posición
 
-    for char in regex:
-        if char == '(':
-            stack.append(char)
-        elif char == ')':
-            stack.pop()
-        elif char == '|':
-            stack.append(char)
-        elif char == '*':
-            operand = stack.pop()
-            treeDC = ('*', operand)
-            nullable_val = nullable(treeDC)
-            firstpos_val = firstpos(treeDC)
-            lastpos_val = lastpos(treeDC)
-            for p in lastpos_val:
-                followpos_dict[p].update(firstpos_val)
-            stack.append(treeDC)  # Push the treeDC back to stack
-        else:
-            stack.append(pos)
-            pos += 1
+    for char in regex_postfix:
+        if char.isalnum() or char == 'ε':
+            node = Node(char)
+            node.position = position_counter
+            position_counter += 1
+            stack.append(node)
+            nodes_calculated.add(node)
+        elif char in ".|*+?#":  # Operadores
+            if char == '.':
+                if len(stack) < 2:
+                    raise ValueError("Insuficientes operandos para la concatenación")
+                right = stack.pop()
+                left = stack.pop()
+                print(f"Concatenando nodos {left.value} y {right.value}")
+                node = Node('.')
+                node.left = left
+                node.position = position_counter
+                position_counter += 1
+                if isinstance(right, Node) and right.value == '#':
+                    node.right = right
+                else:
+                    node.right = right
+                stack.append(node)
+            elif char == '|':
+                right = stack.pop()
+                left = stack.pop()
+                print(f"Creando nodo OR con hijos {left.value} y {right.value}")
+                node = Node('|')
+                node.left = left
+                node.right = right
+                node.position = position_counter
+                position_counter += 1
+                stack.append(node)
+            elif char == '*':
+                child = stack.pop()
+                print(f"Creando nodo Kleene con hijo {child.value}")
+                node = Node('*')
+                node.left = child
+                node.position = position_counter
+                position_counter += 1
+                stack.append(node)
+            elif char == '+':
+                child = stack.pop()
+                print(f"Creando nodo Positivo con hijo {child.value}")
+                node = Node('+')
+                node.left = child
+                node.position = position_counter
+                position_counter += 1
+                stack.append(node)
+            elif char == '?':
+                child = stack.pop()
+                print(f"Creando nodo Opcional con hijo {child.value}")
+                node = Node('?')
+                node.left = child
+                node.position = position_counter
+                position_counter += 1
+                stack.append(node)
+            elif char == '#':
+                if stack:
+                    child = stack.pop()
+                    if isinstance(child, Node) and child.value == '.':
+                        node = Node('.')
+                        node.left = child.left
+                        node.right = Node('#')
+                        node.position = position_counter
+                        position_counter += 1
+                        print(f"Creando nodo concatenación con hijo izquierdo {child.left.value} y hijo derecho #")
+                        stack.append(node)
+                    else:
+                        node = Node('#')
+                        node.right = child
+                        node.position = position_counter
+                        position_counter += 1
+                        print(f"Creando nodo marcador final con hijo {child.value}")
+                        stack.append(node)
+                else:
+                    node = Node('#')
+                    node.position = position_counter
+                    position_counter += 1
+                    print("Creando nodo marcador final sin hijos")
+                    stack.append(node)
 
-    root = stack[0]
+    return stack.pop(), nodes_calculated
 
-    followpos(root, followpos_dict)
 
-    return root, followpos_dict
-
-def epsilon_closureDC(estado, followpos_dict):
-    epsilon_cerradura = set([estado])
-    stack = [estado]
-    while stack:
-        current = stack.pop()
-        for siguiente in followpos_dict[current]:
-            if siguiente not in epsilon_cerradura:
-                epsilon_cerradura.add(siguiente)
-                stack.append(siguiente)
-    return epsilon_cerradura
-
-def moveDC(epsilon_cerradura, simbolo, followpos_dict):
-    move_result = set()
-    for estado in epsilon_cerradura:
-        move_result.update(followpos_dict[estado] if estado[0] == simbolo else set())
-    return move_result
-
-def build_dfa(nfa_root, followpos_dict):
-    alfabeto = set()
-    for conjunto in followpos_dict.values():
-        alfabeto.update(conjunto)
-
-    dfa_transiciones = {}
-    estados_no_marcados = [epsilon_closureDC(nfa_root, followpos_dict)]
-    estados_marcados = []
-
-    while estados_no_marcados:
-        current = estados_no_marcados.pop()
-        estados_marcados.append(current)
-
-        for simbolo in alfabeto:
-            siguiente_estado = epsilon_closureDC(moveDC(current, simbolo, followpos_dict), followpos_dict)
-            if siguiente_estado not in estados_marcados + estados_no_marcados:
-                estados_no_marcados.append(siguiente_estado)
-            dfa_transiciones[(tuple(current), simbolo)] = tuple(siguiente_estado)
-
-    return dfa_transiciones
-
-def visualize_dfa(dfa_transiciones):
+def visualize_tree(root):
     G = nx.DiGraph()
-    for estado, transicion in dfa_transiciones.items():
-        G.add_edge(estado[0], transicion, label=estado[1])
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, with_labels=True, arrows=True)
-    edge_labels = {(estado, transicion): label for (estado, transicion), label in nx.get_edge_attributes(G, 'label').items()}
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    build_networkx_graph(root, G)
+
+    # Ajusta el parámetro scale para aumentar la distancia entre los nodos hijos
+    pos = nx.kamada_kawai_layout(G, scale=100.0)
+
+    labels = {node: node.value for node in G.nodes()}
+    nx.draw(G, pos, labels=labels, with_labels=True, node_size=700, node_color="skyblue", font_size=15, font_weight="bold")
     plt.show()
+
+def build_networkx_graph(root, G):
+    if root is not None:
+        stack = [root]  # Usamos una pila para realizar DFS
+
+        while stack:
+            current_node = stack.pop()
+            G.add_node(current_node)
+
+            if current_node.left:
+                stack.append(current_node.left)
+                G.add_node(current_node.left)
+                G.add_edge(current_node, current_node.left)
+
+            if current_node.right:
+                stack.append(current_node.right)
+                G.add_node(current_node.right)
+                G.add_edge(current_node, current_node.right)
+
+            if not current_node.left and not current_node.right:
+                G.add_node(current_node)
+
+
+def get_all_nodes(node):
+    nodes = set()
+
+    if node is not None:
+        nodes.add(node)
+        nodes |= get_all_nodes(node.left)
+        nodes |= get_all_nodes(node.right)
+
+    return nodes
+
+def nullable(node):
+    if node.value == 'ε':
+        return True
+    elif node.value == '.':
+        return nullable(node.left) and nullable(node.right)
+    elif node.value == '|':
+        return nullable(node.left) or nullable(node.right)
+    elif node.value == '*':
+        return True
+    elif node.value == '+':
+        return nullable(node.left)
+    elif node.value == '?':
+        return True if nullable(node.left) else nullable(node.right)
+
+def firstpos(node):
+    if node.value.isalnum() or node.value == 'ε':
+        return {id(node)}
+    elif node.value == '.':
+        if nullable(node.left):
+            return firstpos(node.left) | firstpos(node.right)
+        else:
+            return firstpos(node.left)
+    elif node.value == '|':
+        return firstpos(node.left) | firstpos(node.right)
+    elif node.value == '*':
+        return firstpos(node.left)
+    elif node.value == '+':
+        return firstpos(node.left)
+    elif node.value == '?':
+        return firstpos(node.left)
+
+def lastpos(node):
+    if node.value.isalnum() or node.value == 'ε':
+        return {id(node)}
+    elif node.value == '.':
+        if nullable(node.right):
+            return lastpos(node.left) | lastpos(node.right)
+        else:
+            return lastpos(node.right)
+    elif node.value == '|':
+        return lastpos(node.left) | lastpos(node.right)
+    elif node.value == '*':
+        return lastpos(node.left)
+    elif node.value == '+':
+        return lastpos(node.left)
+    elif node.value == '?':
+        return lastpos(node.left)
+
+def followpos(node):
+    if node.value == '.':
+        for pos in lastpos(node.left):
+            for fp in firstpos(node.right):
+                follow_pos[pos].update(fp)
+    elif node.value == '*':
+        for pos in lastpos(node.left):
+            for fp in firstpos(node):
+                follow_pos[pos].update(fp)
+    elif node.value == '|':
+        pass  # No se necesita hacer nada para operador de unión
+    elif node.value == '+':
+        for pos in lastpos(node.left):
+            for fp in firstpos(node.left):
+                follow_pos[pos].update(fp)
+    elif node.value == '?':
+        pass  # No se necesita hacer nada para operador opcional
 
 def mainConstruccionDirecta():
     regex = input("Ingrese la expresión regular: ")
-    nfa_root, followpos_dict = build_nfa(regex)
-    dfa_transiciones = build_dfa(nfa_root, followpos_dict)
-    visualize_dfa(dfa_transiciones)
     
-
 
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
 
@@ -598,12 +668,10 @@ def remove_unreachable_states(dfa):
 #Simulación:
 
 if __name__ == "__main__":
-    expression = input("Enter your infix expression: ") 
-    postfix_expression = shunting_yard(expression) 
-    print("Postfix expression:", postfix_expression) 
-
     regex = input("Enter a regular expression: ")
     w = input("Enter a string to check: ")
+    postfix_expression = shunting_yard(regex) 
+    print("Postfix expression:", postfix_expression) 
 
     afn, accept_state = regex_to_afn(regex, 0)
     print("afn edges", afn.edges(data='label'))
@@ -726,5 +794,18 @@ if __name__ == "__main__":
         print(f"'{w}' no pertenece al lenguaje L({regex})")
 
     #Construcción directa (AFD).
-    
-    #mainConstruccionDirecta()
+        
+    syntax_tree, nodes_calculated = build_syntax_tree(regex)
+    print("Árbol Sintáctico:")
+    visualize_tree(syntax_tree)
+
+    # Construir followpos
+    follow_pos = {node.position: set() for node in nodes_calculated}  # Usar solo los nodos calculados
+    for node in nodes_calculated:
+        followpos(node)
+
+    # Imprimir followpos para cada posición
+    print("\nFollowpos:")
+    for pos, fp in follow_pos.items():
+        values = ", ".join(str(node.position) for node in nodes_calculated if node.position in fp)
+        print(f"Posición {pos}: {{{values}}}")

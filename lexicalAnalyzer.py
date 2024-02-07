@@ -19,9 +19,10 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
     for i in range(len(expression)): #Por cada elemento según el rango de la variable expression:
         char = expression[i]
         result.append(char) #Se agrega caracter por caracter al arreglo.
-
         if i + 1 < len(expression): #Si la expresión es menor que la cantidad de elementos en el arreglo, se coloca en la posición i + 1.
             lookahead = expression[i + 1]
+            position = expression[i]
+            lookbehind = expression[i - 1]
 
             if char.isalnum() or char == 'ε':
                 if lookahead not in operators and lookahead != '.': #Si el caracter es una letra o un dígito, no está en los operadores y no es unc concatenación:
@@ -35,6 +36,12 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
             elif char == ')' and lookahead == '(':
                 result.append('.')
             elif char == '?' and lookahead.isalnum():
+                result.append('|ε')
+            elif char == '?' and position == len(expression):
+                result.append('|ε')
+            elif char == '+' and lookahead.isalnum():
+                result.append(lookbehind)
+                result.append('*')
                 result.append('.')
             elif char == '#' and lookahead.isalnum():
                 result.append('.')
@@ -42,19 +49,29 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
     return ''.join(result) #Devuelve el resultado.
 
 def shunting_yard(expression): #Función para realizar el algoritmo shunting yard.
-     precedence = {'#': 1,'+': 1, '|': 1, '.': 2, '*': 3, '?':3} # Orden de precedencia entre operadores.
+     if '?' in expression:
+        new_expression = question_mark(expression)
+     elif '+' in expression:
+         new_expression = kleene_closure(expression)
+    
+     precedence = {'#': 1, '|': 1, '.': 2, '*': 3, '+': 3, '?':3} # Orden de precedencia entre operadores.
 
      output_queue = [] #Lista de salida como notación postfix.
      operator_stack = []
      i = 0 #Inicializa contador.
-
-     expression = insert_concatenation(expression) #Llama a la función para que se ejecute.
+     
+     if '?' in expression:
+        new_expression = insert_concatenation(new_expression)
+     elif '+' in expression:
+        new_expression = insert_concatenation(expression)
+     else:
+        expression = insert_concatenation(expression) #Llama a la función para que se ejecute.
 
      while i < len(expression): #Mientras i sea menor que la longitud de la expresión.
          token = expression[i] #El token es igual al elemento en la lista en la posición i.
          if token.isalnum() or token == 'ε': #Si el token es una letra o un dígito, o es epsilon.
              output_queue.append(token) #Se agrega a output_queue.
-         elif token in "+|*?.#": #Si hay alguno de estos operadores en el token:
+         elif token in "|*.#": #Si hay alguno de estos operadores en el token:
              while (operator_stack and operator_stack[-1] != '(' and #Se toma en cuenta la precedencia y el orden de operadores para luego añadirla al queue y a la pila.
                     precedence[token] <= precedence.get(operator_stack[-1], 0)):
                  output_queue.append(operator_stack.pop())
@@ -80,15 +97,48 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
      else: #Si hay uno, lo muestra en pantalla.
          return ''.join(output_queue)
 
+def question_mark(expression):
+    i = 0
+    new_expression = ''
+    while i < len(expression):
+        if expression[i] == '?' and i + 1 < len(expression) and expression[i + 1] == '|':
+            new_expression += '|ε'
+            i += 2
+        elif expression[i] == '?' and i + 1 < len(expression) and expression[i + 1].isalnum() == True:
+            new_expression += '|ε'
+            i += 1
+        elif expression[i] == '?':
+            new_expression += '|ε'
+            i += 1
+        else:
+            new_expression += expression[i]
+            i += 1
+    return new_expression
+
+def kleene_closure(expression):
+    i = 0
+    new_expression = ''
+    while i < len(expression):
+        if expression[i] == '+' and i + 1 < len(expression):
+            new_expression += f'{expression[i-1]}*'
+            i += 1
+        elif expression[i] == '+' and i + 1 >= len(expression):
+            new_expression += f'{expression[i-1]}*'
+            i += 1
+        else:
+            new_expression += expression[i]
+            i += 1
+    return new_expression
+
 #Algoritmo de Thompson para convertir una expresión postfix en un AFN.
 
 def is_letter_or_digit(char): #Función que sirve para detectar si es una letra o un dígito en la expresión regular.
-    return 'a' <= char <= 'z' or 'A' <= char <= 'Z' or '0' <= char <= '9'
+    return 'a' <= char <= 'z' or 'A' <= char <= 'Z' or '0' <= char <= '9' or char == 'ε'
 
 def regex_to_afn(regex,index):
     #Convertir la expresión regular a notación postfix
     postfix = shunting_yard(regex)
-
+    
     #Inicialización de variables
     stack = []  #Pila para mantener un seguimiento de los estados
     accept_state = []  #Lista de estados de aceptación
@@ -105,10 +155,13 @@ def regex_to_afn(regex,index):
     state_count += 1
     alt_states = [set([1])]  #Conjuntos de estados alternativos
     cont = 0  #Contador auxiliar
-    
+    concat_count = 0
+
     #Recorrer la expresión regular en notación postfix
     for symbol in postfix:
         #Manejar los símbolos y operadores de la expresión regular
+        if symbol == '.':
+           concat_count += 1
         if is_letter_or_digit(symbol):  #Si el símbolo es una letra o un dígito
             state_count += 1
             cont += 1
@@ -123,9 +176,15 @@ def regex_to_afn(regex,index):
             #Ajustar el carácter dependiendo del contexto
             if char == '(':
                 char = regex[state - 1]
+            elif char == ')':
+                char = regex[state - 1]
             elif char == '*':
                 char = regex[state - 7]
             elif char == 'ε':
+                char = regex[state - 1]
+            elif char == '?':
+                char = regex[state - 1]
+            elif char == '|':
                 char = regex[state - 1]
 
             #Agregar transición desde el estado actual al próximo estado
@@ -142,6 +201,11 @@ def regex_to_afn(regex,index):
             afn.add_node(state_count)
             stack.append(state_count)
 
+            if previous_symbol != '|' and previous_symbol != '.':
+               afn.add_edge(state, state, label=previous_symbol)
+            elif previous_symbol == '.':
+              afn.add_edge(state, state-(concat_count + 1), label='ε')
+
             #Agregar estados de aceptación
             accept_state += [state]
             accept_state += [state - 1]
@@ -157,9 +221,17 @@ def regex_to_afn(regex,index):
                 char1 = regex[state1 - 1]
             elif char1 == '*':
                 char1 = regex[state1 - 1]
-
             if char1 == '(':
                 char1 = 'ε'
+            
+            if char1 == '?':
+                char1 = regex[state1 - 1]
+            
+            if char1 == '+':
+                char1 = regex[state1 - 1]
+
+            if previous_symbol == '*':
+                afn.add_edge(state, state-1, label='ε')
 
             char2 = regex[state2 - 3]  #Obtener el carácter anterior al segundo estado
             if char2 == '(':
@@ -191,7 +263,7 @@ def regex_to_afn(regex,index):
             afn.add_edge(state2, state_count + 1, label='ε')
 
             if sig == '*':
-                afn.add_edge(state_count + 1, state1 - 1, label='ε')
+                afn.add_edge(state_count + 1, state1 - concat_count, label='ε')
             state_count += 1
             if afn.has_edge(state1, state2):
                 afn.remove_edge(state1, state2)
@@ -200,17 +272,6 @@ def regex_to_afn(regex,index):
             state2 = stack.pop()
             state1 = stack.pop()
             stack.append(state2)
-        elif symbol == '?':  # Operador de cero o una ocurrencia
-            # Manejar el operador '?'
-            state1 = stack.pop()
-            state2 = state_count + 1
-            afn.add_node(state2)
-            afn.add_edge(state1, state2, label='ε')  # Transición desde el estado antes del '?'
-            afn.add_edge(state1, state2 + 1, label='ε')  # Transición ε directa al siguiente estado
-            afn.add_edge(state2, state2 + 1, label=previous_symbol)  # Transición desde el estado del '?'
-            afn.add_edge(state1, state2 + 1, label='ε')
-            stack.append(state2 + 1)
-            state_count += 1
         index += 1
         previous_symbol = symbol  #Actualizar el símbolo anterior en el proceso
     
@@ -786,13 +847,13 @@ if __name__ == "__main__":
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
-
+'''
     #Construcción directa (AFD).
         
     syntax_tree, nodes_calculated = build_syntax_tree(regex)
     print("Árbol Sintáctico:")
     visualize_tree(syntax_tree)
-
+    
     # Construir followpos
     follow_pos = {node.position: set() for node in nodes_calculated}  # Usar solo los nodos calculados
     for node in nodes_calculated:
@@ -802,4 +863,5 @@ if __name__ == "__main__":
     print("\nFollowpos:")
     for pos, fp in follow_pos.items():
         values = ", ".join(str(node.position) for node in nodes_calculated if node.position in fp)
-        print(f"Posición {pos}: {{{values}}}")
+        print(f"Posición {pos}: {{{node.value}}}")
+'''

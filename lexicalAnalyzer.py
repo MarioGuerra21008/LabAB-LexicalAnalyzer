@@ -53,6 +53,9 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
         new_expression = question_mark(expression)
      elif '+' in expression:
          new_expression = kleene_closure(expression)
+     elif '?' in expression and '+' in expression:
+         new_expression = question_mark(expression)
+         new_expression = kleene_closure(expression)
     
      precedence = {'#': 1, '|': 1, '.': 2, '*': 3, '+': 3, '?':3} # Orden de precedencia entre operadores.
 
@@ -61,9 +64,11 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
      i = 0 #Inicializa contador.
      
      if '?' in expression:
-        new_expression = insert_concatenation(new_expression)
+        expression = insert_concatenation(new_expression)
      elif '+' in expression:
-        new_expression = insert_concatenation(expression)
+        expression = insert_concatenation(new_expression)
+     elif '?' in expression and '+' in expression:
+         expression = insert_concatenation(new_expression)
      else:
         expression = insert_concatenation(expression) #Llama a la función para que se ejecute.
 
@@ -143,7 +148,8 @@ def regex_to_afn(regex,index):
     stack = []  #Pila para mantener un seguimiento de los estados
     accept_state = []  #Lista de estados de aceptación
     state_count = 0  #Contador de estados
-    previous_symbol = None  #Símbolo anterior en el proceso
+    previous_symbol = postfix[index-1] #Símbolo anterior en el proceso
+    sig = postfix[index+1]
 
     #Crear un grafo dirigido para representar el AFN
     afn = nx.DiGraph()
@@ -152,49 +158,56 @@ def regex_to_afn(regex,index):
     epsilon_state = state_count + 1  #Estado de transición épsilon
     afn.add_node(epsilon_state)
     afn.add_edge(state_count, epsilon_state, label='ε')  #Transición épsilon desde el estado inicial
+    print("Transicion inicial ", state_count, " ", epsilon_state)
     state_count += 1
-    alt_states = [set([1])]  #Conjuntos de estados alternativos
-    cont = 0  #Contador auxiliar
+    cont = 0  #Contador para símbolos alfanuméricos.
     concat_count = 0
 
     #Recorrer la expresión regular en notación postfix
     for symbol in postfix:
         #Manejar los símbolos y operadores de la expresión regular
-        if symbol == '.':
-           concat_count += 1
-        if is_letter_or_digit(symbol):  #Si el símbolo es una letra o un dígito
+        if symbol == '.':  #Operador de concatenación
+            concat_count += 1
+            state2 = stack.pop()
+            state1 = stack.pop()
+            stack.append(state2)
+        elif is_letter_or_digit(symbol):  #Si el símbolo es una letra o un dígito
             state_count += 1
             cont += 1
             afn.add_node(state_count)
             afn.add_edge(state_count - 1, state_count, label=symbol)
+            print("Transicion símbolo ", state_count-1, " ", state_count)
             stack.append(state_count)
         elif symbol == '*':  #Operador de clausura de Kleene
             #Manejar la clausura de Kleene
-            state = stack.pop()
-            char = regex[state - 2]  #Obtener el carácter anterior al estado actual
+            if concat_count == 0:
+                state = stack.pop()
+                char = regex[state - 2]  #Obtener el carácter anterior al estado actual
+            else:
+                state = stack.pop()
+                char = regex[state - concat_count]  #Obtener el carácter anterior al estado actual
 
             #Ajustar el carácter dependiendo del contexto
-            if char == '(':
+            if char == '(' and previous_symbol.isalnum():
                 char = regex[state - 1]
-            elif char == ')':
-                char = regex[state - 1]
-            elif char == '*':
+            elif char == '*' and previous_symbol.isalnum():
                 char = regex[state - 7]
             elif char == 'ε':
                 char = regex[state - 1]
-            elif char == '?':
-                char = regex[state - 1]
-            elif char == '|':
+            elif char == '|' and previous_symbol.isalnum():
                 char = regex[state - 1]
 
             #Agregar transición desde el estado actual al próximo estado
-            if previous_symbol != '|':
+            if previous_symbol != '|' and previous_symbol.isalnum():
                 afn.add_edge(state, state, label=previous_symbol)
+                print("Transicion si el símbolo es * y antes hay unión ", state, " ", state)
             afn.add_edge(state_count, state_count + 1, label='ε')
+            print("Transicion epsilon si el símbolo es * ", state_count, " ", state_count+1)
 
             #Manejar la clausura de Kleene y actualizar el estado actual
             if previous_symbol == '|' and cont <= 2:
                 afn.add_edge(epsilon_state, state_count + 1, label='ε')
+                print("Transicion si el símbolo es * y antes hay unión, si hay menos o dos símbolos ", epsilon_state, " ", state_count)
 
             epsilon_state = state_count + 2
             state_count += 1
@@ -203,13 +216,11 @@ def regex_to_afn(regex,index):
 
             if previous_symbol != '|' and previous_symbol != '.':
                afn.add_edge(state, state, label=previous_symbol)
-            elif previous_symbol == '.':
-              afn.add_edge(state, state-(concat_count + 1), label='ε')
+               print("Transicion si el símbolo anterior no es unión o concatenación ", state, " ", state)
 
             #Agregar estados de aceptación
             accept_state += [state]
             accept_state += [state - 1]
-
         elif symbol == '|':  #Operador de alternancia
             #Manejar la alternancia de estados
             state2 = stack.pop()
@@ -221,36 +232,40 @@ def regex_to_afn(regex,index):
                 char1 = regex[state1 - 1]
             elif char1 == '*':
                 char1 = regex[state1 - 1]
-            if char1 == '(':
+            elif char1 == '(':
                 char1 = 'ε'
-            
-            if char1 == '?':
+            elif char1 == '?':
                 char1 = regex[state1 - 1]
-            
-            if char1 == '+':
+            elif char1 == '+':
                 char1 = regex[state1 - 1]
 
             if previous_symbol == '*':
                 afn.add_edge(state, state-1, label='ε')
+                print("Transicion si el símbolo es | y antes hay * ", state, " ", state-1)
 
             char2 = regex[state2 - 3]  #Obtener el carácter anterior al segundo estado
-            if char2 == '(':
+            if char2 == '(' and previous_symbol.isalnum():
                 char2 = regex[state2]
 
             if char2 == char1:
                 char2 = regex[state2 - 2]
-            elif char2 == '*':
+            
+            if char2 == '*':
                 char2 == 'ε'
 
             state_count += 1
 
             #Agregar transiciones desde el estado épsilon a los estados alternativos
-            if cont >= 3:
+            if cont >= 3 and char1.isalnum() and char2.isalnum():
                 afn.add_edge(epsilon_state + (cont - 2), state1, label=char1)
+                print("Edge 1 de condición cont >= 3", epsilon_state + (cont - 2), " ", state1)
                 afn.add_edge(epsilon_state + (cont - 2), state2, label=char2)
-            else:
+                print("Edge 2 de condición cont >= 3 ", epsilon_state + (cont - 2), " ", state2)
+            if cont < 3 and char1.isalnum() and char2.isalnum():
                 afn.add_edge(epsilon_state, state1, label=char1)
+                print("Si cont es menor que 3: ", epsilon_state, " ", state1)
                 afn.add_edge(epsilon_state, state2, label=char2)
+                print("Si cont es menor que 3: ", epsilon_state, " ", state2)
 
             #Actualizar el siguiente símbolo en el proceso
             if index + 1 < len(postfix):
@@ -260,18 +275,17 @@ def regex_to_afn(regex,index):
 
             #Agregar transiciones desde los estados a un nuevo estado
             afn.add_edge(state1, state_count + 1, label='ε')
+            print("Transición epsilon del state1 ", state1, " ", state_count+1)
             afn.add_edge(state2, state_count + 1, label='ε')
+            print("Transicion epsilon del state2 ", state2, " ", state_count+1)
 
             if sig == '*':
                 afn.add_edge(state_count + 1, state1 - concat_count, label='ε')
+                print("Si el símbolo es | y el siguiente símbolo es * ", state_count+1, " ", state1-concat_count)
             state_count += 1
             if afn.has_edge(state1, state2):
                 afn.remove_edge(state1, state2)
             stack.append(state_count)
-        elif symbol == '.':  #Operador de concatenación
-            state2 = stack.pop()
-            state1 = stack.pop()
-            stack.append(state2)
         index += 1
         previous_symbol = symbol  #Actualizar el símbolo anterior en el proceso
     
@@ -280,6 +294,7 @@ def regex_to_afn(regex,index):
     accept_state += [final_state]
     afn.add_node(final_state)
     afn.add_edge(state_count, final_state, label='ε')
+    print("Estado de aceptación ", state_count, " ", final_state)
 
     #Establecer el estado inicial y los estados de aceptación en el grafo
     afn.graph['start'] = start_state
@@ -379,6 +394,9 @@ def check_membership(afn, s):
             #Actualizar los estados actuales con los siguientes estados
             if symbol != '*':
                 current_states = next_states
+        print("Estado actual: ",state)
+        print("Posibles caminos: ",afn[state])
+        print("Lee simbolo: ",symbol)
     #Verificar si algún estado actual es un estado de aceptación
     return any(state in afn.graph['accept'] for state in current_states)
 
@@ -738,9 +756,9 @@ if __name__ == "__main__":
     estados_iniciales = {nodo for nodo in afn.nodes() if len(list(afn.predecessors(nodo))) == 0}
     estados_aceptacion = {nodo for nodo in afn.nodes() if len(list(afn.successors(nodo))) == 0}
 
+    
     # Visualización AFN
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 3, 1)
+    plt.figure(figsize=(10,10))
     pos = nx.spring_layout(afn, seed=42)
     labels = {edge: afn[edge[0]][edge[1]]['label'] for edge in afn.edges()}
     nx.draw_networkx_nodes(afn, pos, node_color='blue')
@@ -800,8 +818,7 @@ if __name__ == "__main__":
     pos = nx.spring_layout(G)
 
     # Dibujar los nodos y las aristas
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
+    plt.figure(figsize=(10, 10))
     labels = {edge: label for edge, label in nx.get_edge_attributes(G, 'label').items()}
     nx.draw(G, pos, with_labels=True, node_size=200, node_color='blue')
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
@@ -832,8 +849,7 @@ if __name__ == "__main__":
                 min_dfa.remove_edge(source, target)
 
     # Visualización AFD minimizado
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
+    plt.figure(figsize=(10, 10))
     pos_min = nx.spring_layout(min_dfa)
     nx.draw(min_dfa, pos_min, with_labels=True, node_size=200, node_color='blue')
     plt.title("Minimized DFA Visualization")

@@ -397,7 +397,7 @@ class Node:
         self.num = None
 
 def build_syntax_tree(regex):
-    regex_postfix = shunting_yard(regex + '#')  # Convertir la expresión regular a formato postfix con '#' al final
+    regex_postfix = shunting_yard(regex +'#')  # Convertir la expresión regular a formato postfix con '#' al final
     stack = []
     nodes_calculated = set()  # Conjunto para rastrear qué nodos ya han sido calculados
     leaf_calculated = set()
@@ -424,10 +424,7 @@ def build_syntax_tree(regex):
                 node.left = left
                 node.position = position_counter
                 position_counter += 1
-                if isinstance(right, Node) and right.value == '#':
-                    node.right = right
-                else:
-                    node.right = right
+                node.right = right
                 stack.append(node)
                 nodes_calculated.add(node)
             elif char == '|':
@@ -471,17 +468,19 @@ def build_syntax_tree(regex):
             elif char == '#':
                 if stack:
                     child = stack.pop()
-                    if isinstance(child, Node) and child.value == '.':
+                    if isinstance(child, Node):
                         node = Node('.')
-                        node.left = child.left
+                        node.left = child
                         node.right = Node('#')
                         node.position = position_counter
                         position_counter += 1
                         node.num = nodo_position
+                        node.right.num = nodo_position
                         nodo_position += 1
                         print(f"Creando nodo concatenación con hijo izquierdo {child.left.value} y hijo derecho #")
                         stack.append(node)
                         leaf_calculated.add(node)
+                        nodes_calculated.add(node)
                     else:
                         node = Node('#')
                         node.right = child
@@ -502,8 +501,7 @@ def build_syntax_tree(regex):
                     print("Creando nodo marcador final sin hijos")
                     stack.append(node)
                     leaf_calculated.add(node)
-                    
-                    
+                
 
     return stack.pop(), nodes_calculated,leaf_calculated
 
@@ -568,8 +566,10 @@ def nullable(node):
         return False
 
 def firstpos(node):
-    if node.value.isalnum() or node.value == 'ε':
+    if node.value.isalnum():
         return {node.num}
+    elif node.value == 'ε':
+        return {0}
     elif node.value == '.':
         if nullable(node.left):
             return firstpos(node.left) | firstpos(node.right)
@@ -587,15 +587,20 @@ def firstpos(node):
         return {node.num}
 
 def lastpos(node):
-    if node.value.isalnum() or node.value == 'ε':
+    if node.value.isalnum():
         return {node.num}
+    elif node.value == 'ε':
+        return {0}
     elif node.value == '.':
         if nullable(node.right):
             return lastpos(node.left) | lastpos(node.right)
         else:
             return lastpos(node.right)
     elif node.value == '|':
-        return lastpos(node.left) | lastpos(node.right)
+        if nullable(node.left) or nullable(node.right):
+            return lastpos(node.left) | lastpos(node.right)
+        else:
+            return lastpos(node.left) | lastpos(node.right)
     elif node.value == '*':
         return lastpos(node.left)
     elif node.value == '+':
@@ -619,6 +624,8 @@ def followpos(node):
         for pos in lastpos(node.left):
             for fp in firstpos(node.left):
                 follow_pos[pos].add(fp)
+    elif node.value == '|':
+        pass 
     elif node.value == '?':
         pass  # No se necesita hacer nada para operador opcional  
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
@@ -826,17 +833,20 @@ if __name__ == "__main__":
 
     #Construcción directa (AFD).
         
-    syntax_tree, nodes_calculated,leaf_calculated = build_syntax_tree(regex)
+    syntax_tree, nodes_calculated, leaf_calculated = build_syntax_tree(regex)
     print("Árbol Sintáctico:")
     visualize_tree(syntax_tree)
 
-    follow_pos = {node.num: set() if node.num is not None else {} for node in leaf_calculated}
+    print(postfix_expression)
+
+    follow_pos = {node.num: set() for node in leaf_calculated}
 
     for num, conjunto in follow_pos.items():
         print(f"Posición: {num}, Conjunto: {conjunto}")
 
-    for node in leaf_calculated:
-        print(node.num)
+
+    for node in nodes_calculated:
+        print(node.value)
 
     for node in nodes_calculated:
         followpos(node)

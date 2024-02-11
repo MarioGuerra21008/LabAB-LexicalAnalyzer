@@ -405,6 +405,7 @@ class Node:
         self.left = None
         self.right = None
         self.num = None
+        self.position = 0
 
 def build_syntax_tree(regex):
     regex_postfix = shunting_yard(regex +'#')  # Convertir la expresión regular a formato postfix con '#' al final
@@ -489,7 +490,6 @@ def build_syntax_tree(regex):
                         nodo_position += 1
                         print(f"Creando nodo concatenación con hijo izquierdo y hijo derecho #")
                         stack.append(node)
-                        leaf_calculated.add(node)
                         nodes_calculated.add(node)
                     else:
                         node = Node('#')
@@ -510,7 +510,6 @@ def build_syntax_tree(regex):
                     nodo_position += 1
                     print("Creando nodo marcador final sin hijos")
                     stack.append(node)
-                    leaf_calculated.add(node)
                 
 
     return stack.pop(), nodes_calculated,leaf_calculated
@@ -639,9 +638,9 @@ def followpos(node):
     elif node.value == '?':
         pass  # No se necesita hacer nada para operador opcional
 
-def build_dfa(syntax_tree, firstpos_dict, lastpos_dict, followpos_dict):
+def build_dfa(follow_pos,root,leaf_calculated):
     # Obtener el estado inicial del AFD
-    start_state = tuple(sorted(followpos_dict[syntax_tree.num]))
+    start_state = tuple(firstpos(root))
     state_counter = 0
 
     # Inicializar un grafo dirigido para representar el AFD
@@ -661,35 +660,84 @@ def build_dfa(syntax_tree, firstpos_dict, lastpos_dict, followpos_dict):
         for symbol in get_alphabet(afn):
             # Calcular los estados a los que se llega desde el estado actual del AFD utilizando el símbolo
             target_states = set()
-            for pos in current_dfa_direct_state:
-                if pos.value == symbol:  # Verificar si la posición es igual al símbolo actual
-                    target_states.update(followpos_dict[pos.num])
+            for node in leaf_calculated:
+                for pos in current_dfa_direct_state:
+                    if pos == node.num and node.value == symbol:  # Verificar si la posición es igual al símbolo actual
+                        target_states |= follow_pos[node.num]
+            
+            # Filtrar las tuplas vacías
+            target_states = [state for state in target_states if state]
+            
+            target_states_list = list(target_states)
+            print("\n Esta es la lista", target_states_list)
+            while () in target_states_list:
+                target_states_list.remove(())
+            
+            target_states_complete = tuple(target_states_list)
+            print("\n Esta es la nueva tupla ", target_states_complete)
 
             # Convertir los estados obtenidos en una tupla ordenada
-            dfa_direct_target_state = tuple(sorted(target_states))
+            if target_states_complete:
+                dfa_direct_target_state = tuple(sorted(target_states_complete))
+                print("\n Este es para el AFD ", dfa_direct_target_state)
 
-            # Si el estado obtenido no está en el AFD, marcarlo como no marcado y agregarlo al AFD
-            if dfa_direct_target_state and dfa_direct_target_state not in dfaDirect:
-                unmarked_states.append(dfa_direct_target_state)
-                dfaDirect.add_node(dfa_direct_target_state)
-                state_counter += 1
+                # Evitar agregar la tupla vacía al AFD
+                if dfa_direct_target_state and dfa_direct_target_state != ():
+                    # Si el estado obtenido no está en el AFD, marcarlo como no marcado y agregarlo al AFD
+                    if dfa_direct_target_state not in dfaDirect:
+                        unmarked_states.append(dfa_direct_target_state)
+                        dfaDirect.add_node(dfa_direct_target_state)
 
-            # Agregar una transición desde el estado actual del AFD al estado obtenido con el símbolo actual
-            dfaDirect.add_edge(current_dfa_direct_state, dfa_direct_target_state, label=symbol)
-            state_counter += 1
+                    # Agregar una transición desde el estado actual del AFD al estado obtenido con el símbolo actual
+                    dfaDirect.add_edge(current_dfa_direct_state, dfa_direct_target_state, label=symbol)
 
     # Establecer el estado inicial del AFD
     dfaDirect.graph['start'] = start_state
     # Obtener los estados de aceptación del AFD
-    dfa_direct_accept_states = [state for state in dfaDirect.nodes if any(pos.num in lastpos_dict and lastpos_dict[pos.num] == set() for pos in state)]
-    # Encontrar el último estado que no esté vacío y establecerlo como estado de aceptación
-    for state in reversed(dfa_direct_accept_states):
-        if state != ():
-            dfaDirect.graph['accept'] = [state]
-            break
+    dfa_direct_accept_states = [state for state in dfaDirect.nodes if set(state) & set(lastpos(root)) and state != ()]
+    # Establecer los estados de aceptación del AFD
+    dfaDirect.graph['accept'] = dfa_direct_accept_states
 
     # Retornar el AFD construido
     return dfaDirect
+
+def encontrar_nodo_posicion_mas_grande(raiz):
+    if raiz is None:
+        return None
+
+    # Inicializar el nodo con la posición más grande
+    nodo_posicion_mas_grande = raiz
+
+    # Recorrer el subárbol izquierdo
+    nodo_izquierdo_mas_grande = encontrar_nodo_posicion_mas_grande(raiz.left)
+    if nodo_izquierdo_mas_grande is not None and nodo_izquierdo_mas_grande.position > nodo_posicion_mas_grande.position:
+        nodo_posicion_mas_grande = nodo_izquierdo_mas_grande
+
+    # Recorrer el subárbol derecho
+    nodo_derecho_mas_grande = encontrar_nodo_posicion_mas_grande(raiz.right)
+    if nodo_derecho_mas_grande is not None and nodo_derecho_mas_grande.position > nodo_posicion_mas_grande.position:
+        nodo_posicion_mas_grande = nodo_derecho_mas_grande
+
+    return nodo_posicion_mas_grande
+
+def remove_dead_states(dfa):
+    # Encontrar estados alcanzables desde el estado inicial
+    reachable_states = set()
+    stack = [dfa.graph['start']]
+
+    while stack:
+        state = stack.pop()
+        if state != () and state not in reachable_states:
+            reachable_states.add(state)
+            stack.extend(successor for successor in dfa.successors(state))
+    # Encontrar estados muertos
+    dead_states = set(dfa.nodes) - reachable_states - {()}
+    # Remover estados muertos
+    dfa.remove_nodes_from(dead_states)
+
+    # Remover transiciones relacionadas con estados muertos
+    dfa.remove_edges_from((source, target) for source, target in dfa.edges if source in dead_states or target in dead_states)
+
 
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
 
@@ -920,10 +968,12 @@ if __name__ == "__main__":
         print(f"'{w}' no pertenece al lenguaje L({regex})")
 
     # Construcción directa (AFD).
-
+    
     syntax_tree, nodes_calculated, leaf_calculated = build_syntax_tree(regex)
     print("Árbol Sintáctico:")
     visualize_tree(syntax_tree)
+
+    root = encontrar_nodo_posicion_mas_grande(syntax_tree)
 
     follow_pos = {node.num: set() for node in leaf_calculated}
 
@@ -931,15 +981,8 @@ if __name__ == "__main__":
         print(f"Posición: {num}, Conjunto: {conjunto}")
 
     # Calcula firstpos, lastpos y followpos
-    firstpos_dict = {}
-    lastpos_dict = {}
-    followpos_dict = {}
-    for node in get_all_nodes(syntax_tree):
-        firstpos_dict[node] = firstpos(node)
-        lastpos_dict[node] = lastpos(node)
-        followpos_dict[node.num] = set()
 
-    for node in get_all_nodes(syntax_tree):
+    for node in nodes_calculated:
         followpos(node)
 
     print("\nFollowpos:")
@@ -947,15 +990,41 @@ if __name__ == "__main__":
         print(f"Posición: {num} : {conjunto}")
 
     # Construye el AFD
-    afdDirect = build_dfa(syntax_tree, firstpos_dict, lastpos_dict, followpos_dict)
+    afdDirect = build_dfa(follow_pos,root,leaf_calculated)
+
+    if ((), ()) in afdDirect.nodes:
+        afdDirect.remove_node(((), ()))
+        # Asegúrate de también eliminar cualquier arista que apunte a este nodo
+        for source, target in list(afdDirect.edges):
+            if target == ((), ()):
+                afdDirect.remove_edge(source, target)
+
+    filtered_edges = [(source, target, label) for source, target, label in afdDirect.edges(data='label') if source != () and target != ()]
+
+    # Filtrar los nodos que no son tuplas vacías
+    filtered_nodes = [node for node in afdDirect.nodes if node != ()]
+
+    simbolos = set(label for _, _, label in afdDirect.edges(data='label'))
+    # Obtener el conjunto de estados iniciales
+    estados_iniciales = {nodo for nodo in filtered_nodes if len(list(afdDirect.predecessors(nodo))) == 0}
+
+    estados_aceptacion = set()
+    for nodo in filtered_nodes:
+        aceptacion = True
+        for succ in afdDirect.successors(nodo):
+            if succ not in filtered_nodes or succ == ():
+                aceptacion = False
+                break
+        if aceptacion:
+            estados_aceptacion.add(nodo)
 
     # Visualiza el AFD
     plt.figure(figsize=(10, 10))
     pos = nx.spring_layout(afd)
     labels = {edge: label for edge, label in nx.get_edge_attributes(afd, 'label').items()}
     nx.draw(afd, pos, with_labels=True, node_size=200, node_color='blue')
-    nx.draw_networkx_edge_labels(afd, pos, edge_labels=labels)
-    plt.title("AFD Visualization")
+    nx.draw_networkx_edge_labels(afdDirect, pos, edge_labels=labels)
+    plt.title("Direct AFD Visualization")
     plt.axis("off")
 
     plt.show()
@@ -996,15 +1065,17 @@ if __name__ == "__main__":
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
     
-        # Minimización del DFA directamente
+    # Minimización del DFA directamente
     min_dfa_direct = hopcroft_minimization_dfa_direct(afdDirect)
     
     # Visualización AFD minimizado
     plt.figure(figsize=(10, 10))
     pos_min_direct = nx.spring_layout(min_dfa_direct)
     nx.draw(min_dfa_direct, pos_min_direct, with_labels=True, node_size=200, node_color='blue')
-    plt.title("Minimized DFA Visualization")
+    plt.title("Minimized Direct DFA Visualization")
     plt.axis("off")
+
+    plt.show()
 
     # SIMULACION DEL AFD MINIMIZADO
     result_min_direct = check_membership(min_dfa_direct, w)

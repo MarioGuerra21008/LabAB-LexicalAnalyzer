@@ -27,7 +27,13 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
             if char.isalnum() or char == 'ε':
                 if lookahead not in operators and lookahead != '.': #Si el caracter es una letra o un dígito, no está en los operadores y no es unc concatenación:
                     result.append('.') #Agrega una concatenación a la lista result.
-            elif char == '*' and lookahead.isalnum(): #Si el caracter es una estrella de Kleene o un signo de agrupación, agrega el punto como indica la notación postfix.
+            elif char.isalnum() and lookahead == '(':
+                result.append('.')
+            elif char.isalnum() and lookahead.isalnum():
+                result.append('.')
+            elif char == '*' and lookahead == '(':
+                result.append('.')
+            elif char == '*' and lookahead.isalnum():
                 result.append('.')
             elif char == ')' and lookahead.isalnum():
                 result.append('.')
@@ -36,14 +42,16 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
             elif char == ')' and lookahead == '(':
                 result.append('.')
             elif char == '?' and lookahead.isalnum():
-                result.append('|')
-                result.append('ε')
                 result.append('.')
             elif char == '?' and position == len(expression):
-                result.append('|')
-                result.append('ε')
+                result.append('.')
+            elif char == '?' and lookahead == ')':
                 result.append('.')
             elif char == '+' and lookahead.isalnum():
+                result.append(lookbehind)
+                result.append('*')
+                result.append('.')
+            elif char == '+' and lookahead == ')':
                 result.append(lookbehind)
                 result.append('*')
                 result.append('.')
@@ -53,14 +61,11 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
     return ''.join(result) #Devuelve el resultado.
 
 def shunting_yard(expression): #Función para realizar el algoritmo shunting yard.
+     if '+' in expression:
+         expression = kleene_closure(expression)
      if '?' in expression:
         new_expression = question_mark(expression)
-     elif '+' in expression:
-         new_expression = kleene_closure(expression)
-     elif '?' in expression and '+' in expression:
-         new_expression = question_mark(expression)
-         new_expression = kleene_closure(expression)
-    
+
      precedence = {'#': 1, '|': 1, '.': 2, '*': 3, '+': 3, '?':3} # Orden de precedencia entre operadores.
 
      output_queue = [] #Lista de salida como notación postfix.
@@ -107,22 +112,30 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
          return ''.join(output_queue)
 
 def question_mark(expression):
-    i = 0
-    new_expression = ''
-    while i < len(expression):
-        if expression[i] == '?' and i + 1 < len(expression) and expression[i + 1] == '|':
-            new_expression += '|ε'
-            i += 2
-        elif expression[i] == '?' and i + 1 < len(expression) and expression[i + 1].isalnum() == True:
-            new_expression += '|ε'
-            i += 1
-        elif expression[i] == '?':
-            new_expression += '|ε'
-            i += 1
+    stack= []
+    groups = ""
+    in_group = ''
+    if '+' in expression:
+        expression = kleene_closure(expression)
+    for ch in expression:
+        if ch in "{([":
+            groups += ch
+        elif ch in "})]":
+            groups = groups[:-1]
+            if len(groups) == 0:
+                in_group = in_group[1:]
+                notQuestioned = question_mark(in_group)
+                stack.append('('+notQuestioned+')')
+                continue
+        if len(groups) != 0:
+            in_group +=ch
         else:
-            new_expression += expression[i]
-            i += 1
-    return new_expression
+            if ch == '?':
+                toOperated = stack.pop()
+                stack.append('('+toOperated+'|ε)')
+            else:
+                stack.append(ch)
+    return ''.join(stack)
 
 def kleene_closure(expression):
     i = 0
@@ -150,7 +163,6 @@ class Tree_node:
         self.right = None
         self.value = value
 
-
 def regex_to_afn(regex, index=0):
     # Convertir la expresión regular a notación postfix
     postfix = shunting_yard(regex) # Expresión regular en notación postfix
@@ -159,8 +171,6 @@ def regex_to_afn(regex, index=0):
     stack = []  # Pila para mantener un seguimiento de los estados
     accept_state = []  # Lista de estados de aceptación
     state_count = 0  # Contador de estados
-    previous_symbol = postfix[index - 1]  # Símbolo anterior en el proceso
-    sig = postfix[index + 1]
 
     # Crear un grafo dirigido para representar el AFN
     afn = nx.DiGraph()
@@ -477,7 +487,7 @@ def build_syntax_tree(regex):
                         node.num = nodo_position
                         node.right.num = nodo_position
                         nodo_position += 1
-                        print(f"Creando nodo concatenación con hijo izquierdo {child.left.value} y hijo derecho #")
+                        print(f"Creando nodo concatenación con hijo izquierdo y hijo derecho #")
                         stack.append(node)
                         leaf_calculated.add(node)
                         nodes_calculated.add(node)
@@ -627,7 +637,60 @@ def followpos(node):
     elif node.value == '|':
         pass 
     elif node.value == '?':
-        pass  # No se necesita hacer nada para operador opcional  
+        pass  # No se necesita hacer nada para operador opcional
+
+def build_dfa(syntax_tree, firstpos_dict, lastpos_dict, followpos_dict):
+    # Obtener el estado inicial del AFD
+    start_state = tuple(sorted(followpos_dict[syntax_tree.num]))
+    state_counter = 0
+
+    # Inicializar un grafo dirigido para representar el AFD
+    dfaDirect = nx.DiGraph()
+    # Agregar el estado inicial al AFD
+    dfaDirect.add_node(start_state)
+    state_counter += 1
+    # Inicializar una lista de estados no marcados con el estado inicial del AFD
+    unmarked_states = [start_state]
+
+    # Proceso de construcción del AFD
+    while unmarked_states:
+        # Tomar un estado no marcado del AFD
+        current_dfa_direct_state = unmarked_states.pop()
+
+        # Para cada símbolo del alfabeto
+        for symbol in get_alphabet(afn):
+            # Calcular los estados a los que se llega desde el estado actual del AFD utilizando el símbolo
+            target_states = set()
+            for pos in current_dfa_direct_state:
+                if pos.value == symbol:  # Verificar si la posición es igual al símbolo actual
+                    target_states.update(followpos_dict[pos.num])
+
+            # Convertir los estados obtenidos en una tupla ordenada
+            dfa_direct_target_state = tuple(sorted(target_states))
+
+            # Si el estado obtenido no está en el AFD, marcarlo como no marcado y agregarlo al AFD
+            if dfa_direct_target_state and dfa_direct_target_state not in dfaDirect:
+                unmarked_states.append(dfa_direct_target_state)
+                dfaDirect.add_node(dfa_direct_target_state)
+                state_counter += 1
+
+            # Agregar una transición desde el estado actual del AFD al estado obtenido con el símbolo actual
+            dfaDirect.add_edge(current_dfa_direct_state, dfa_direct_target_state, label=symbol)
+            state_counter += 1
+
+    # Establecer el estado inicial del AFD
+    dfaDirect.graph['start'] = start_state
+    # Obtener los estados de aceptación del AFD
+    dfa_direct_accept_states = [state for state in dfaDirect.nodes if any(pos.num in lastpos_dict and lastpos_dict[pos.num] == set() for pos in state)]
+    # Encontrar el último estado que no esté vacío y establecerlo como estado de aceptación
+    for state in reversed(dfa_direct_accept_states):
+        if state != ():
+            dfaDirect.graph['accept'] = [state]
+            break
+
+    # Retornar el AFD construido
+    return dfaDirect
+
 #Algoritmo de Hopcroft para minimizar un AFD por medio de construcción de subconjuntos.
 
 def hopcroft_minimization(dfa):
@@ -704,7 +767,62 @@ def remove_unreachable_states(dfa):
 
 #Algoritmo para minimizar un AFD hecho por construcción directa.
 
+def hopcroft_minimization_dfa_direct(dfa_direct):
+    # Inicializar particiones con estados de aceptación y no de aceptación
+    partitions = [dfa_direct.graph['accept'], list(set(dfa_direct.nodes) - set(dfa_direct.graph['accept']))]
+    # Inicializar una lista de trabajo con la partición de estados de aceptación
+    worklist = deque([dfa_direct.graph['accept']])
 
+    # Proceso de minimización de Hopcroft
+    while worklist:
+        partition = worklist.popleft()
+        for symbol in get_alphabet(dfa_direct):
+            divided_partitions = []
+            for p in partitions:
+                divided = set()
+                for state in p:
+                    # Verificar si hay transiciones con el símbolo actual hacia estados en la partición
+                    successors = set(dfa_direct.successors(state))
+                    if symbol in [dfa_direct.edges[(state, succ)]['label'] for succ in successors]:
+                        divided.add(state)
+                if divided:
+                    divided_partitions.append(divided)
+                    if len(divided) < len(p):
+                        divided_partitions.append(list(set(p) - divided))
+            # Actualizar las particiones si se dividen en particiones más pequeñas
+            if len(divided_partitions) > len(partitions):
+                if partition in partitions:
+                    partitions.remove(partition)
+                partitions.extend(divided_partitions)
+                worklist.extend(divided_partitions)
+    # Crear el DFA minimizado
+    min_dfa_direct = nx.DiGraph()
+    state_mapping = {}
+
+    # Mapear estados a su representación en la partición
+    for i, partition in enumerate(partitions):
+        if partition:
+            min_state = ', '.join(sorted(str(state) for state in partition))
+            state_mapping.update({state: min_state for state in partition})
+
+    # Construir las transiciones del DFA minimizado
+    for source, target, label in dfa_direct.edges(data='label'):
+        min_source = state_mapping[source]
+        min_target = state_mapping[target]
+        min_dfa_direct.add_edge(min_source, min_target, label=label)
+
+    # Establecer el estado inicial y los estados de aceptación del DFA minimizado
+    min_dfa_direct.graph['start'] = state_mapping[dfa_direct.graph['start']]
+    min_dfa_direct.graph['accept'] = [state_mapping[state] for state in dfa_direct.graph['accept'] if state in state_mapping]
+
+    # Remover nodos y aristas no alcanzables del DFA minimizado
+    if '()' in min_dfa_direct.nodes:
+        min_dfa_direct.remove_node('()')
+        for source, target in list(min_dfa_direct.edges):
+            if target == '()':
+                min_dfa_direct.remove_edge(source, target)
+    # Retornar el DFA minimizado
+    return min_dfa_direct
 
 #Simulación:
 
@@ -801,7 +919,54 @@ if __name__ == "__main__":
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
 
-    #Minimiza el AFD
+    # Construcción directa (AFD).
+
+    syntax_tree, nodes_calculated, leaf_calculated = build_syntax_tree(regex)
+    print("Árbol Sintáctico:")
+    visualize_tree(syntax_tree)
+
+    follow_pos = {node.num: set() for node in leaf_calculated}
+
+    for num, conjunto in follow_pos.items():
+        print(f"Posición: {num}, Conjunto: {conjunto}")
+
+    # Calcula firstpos, lastpos y followpos
+    firstpos_dict = {}
+    lastpos_dict = {}
+    followpos_dict = {}
+    for node in get_all_nodes(syntax_tree):
+        firstpos_dict[node] = firstpos(node)
+        lastpos_dict[node] = lastpos(node)
+        followpos_dict[node.num] = set()
+
+    for node in get_all_nodes(syntax_tree):
+        followpos(node)
+
+    print("\nFollowpos:")
+    for num, conjunto in follow_pos.items():
+        print(f"Posición: {num} : {conjunto}")
+
+    # Construye el AFD
+    afdDirect = build_dfa(syntax_tree, firstpos_dict, lastpos_dict, followpos_dict)
+
+    # Visualiza el AFD
+    plt.figure(figsize=(10, 10))
+    pos = nx.spring_layout(afd)
+    labels = {edge: label for edge, label in nx.get_edge_attributes(afd, 'label').items()}
+    nx.draw(afd, pos, with_labels=True, node_size=200, node_color='blue')
+    nx.draw_networkx_edge_labels(afd, pos, edge_labels=labels)
+    plt.title("AFD Visualization")
+    plt.axis("off")
+
+    plt.show()
+
+    result = check_membership(afdDirect, w)
+    if result:
+        print(f"'{w}' pertenece al lenguaje L({regex})")
+    else:
+        print(f"'{w}' no pertenece al lenguaje L({regex})")
+
+    #Minimiza el AFD por subconjuntos.
     remove_unreachable_states(afd)
 
     min_dfa = hopcroft_minimization(afd)
@@ -830,29 +995,20 @@ if __name__ == "__main__":
         print(f"'{w}' pertenece al lenguaje L({regex})")
     else:
         print(f"'{w}' no pertenece al lenguaje L({regex})")
-
-    #Construcción directa (AFD).
-        
-    syntax_tree, nodes_calculated, leaf_calculated = build_syntax_tree(regex)
-    print("Árbol Sintáctico:")
-    visualize_tree(syntax_tree)
-
-    print(postfix_expression)
-
-    follow_pos = {node.num: set() for node in leaf_calculated}
-
-    for num, conjunto in follow_pos.items():
-        print(f"Posición: {num}, Conjunto: {conjunto}")
-
-
-    for node in nodes_calculated:
-        print(node.value)
-
-    for node in nodes_calculated:
-        followpos(node)
-
-    print("\nFollowpos:")
-    for num, conjunto in follow_pos.items():
-        print(f"Posición: {num} : {conjunto}")
-
     
+        # Minimización del DFA directamente
+    min_dfa_direct = hopcroft_minimization_dfa_direct(afdDirect)
+    
+    # Visualización AFD minimizado
+    plt.figure(figsize=(10, 10))
+    pos_min_direct = nx.spring_layout(min_dfa_direct)
+    nx.draw(min_dfa_direct, pos_min_direct, with_labels=True, node_size=200, node_color='blue')
+    plt.title("Minimized DFA Visualization")
+    plt.axis("off")
+
+    # SIMULACION DEL AFD MINIMIZADO
+    result_min_direct = check_membership(min_dfa_direct, w)
+    if result_min_direct:
+        print(f"'{w}' pertenece al lenguaje L({regex})")
+    else:
+        print(f"'{w}' no pertenece al lenguaje L({regex})")

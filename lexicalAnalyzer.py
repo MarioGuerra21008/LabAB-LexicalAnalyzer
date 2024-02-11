@@ -1020,9 +1020,9 @@ if __name__ == "__main__":
 
     # Visualiza el AFD
     plt.figure(figsize=(10, 10))
-    pos = nx.spring_layout(afd)
-    labels = {edge: label for edge, label in nx.get_edge_attributes(afd, 'label').items()}
-    nx.draw(afd, pos, with_labels=True, node_size=200, node_color='blue')
+    pos = nx.spring_layout(afdDirect)
+    labels = {edge: label for edge, label in nx.get_edge_attributes(afdDirect, 'label').items()}
+    nx.draw(afdDirect, pos, with_labels=True, node_size=200, node_color='blue')
     nx.draw_networkx_edge_labels(afdDirect, pos, edge_labels=labels)
     plt.title("Direct AFD Visualization")
     plt.axis("off")

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import graphviz_layout
 from collections import deque
 from collections import defaultdict
+import sys
 
 #Algoritmo Shunting Yard para pasar una expresión infix a postfix.
 
@@ -41,20 +42,6 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
                 result.append('.')
             elif char == ')' and lookahead == '(':
                 result.append('.')
-            elif char == '?' and lookahead.isalnum():
-                result.append('.')
-            elif char == '?' and position == len(expression):
-                result.append('.')
-            elif char == '?' and lookahead == ')':
-                result.append('.')
-            elif char == '+' and lookahead.isalnum():
-                result.append(lookbehind)
-                result.append('*')
-                result.append('.')
-            elif char == '+' and lookahead == ')':
-                result.append(lookbehind)
-                result.append('*')
-                result.append('.')
             elif char == '#' and lookahead.isalnum():
                 result.append('.')
 
@@ -62,10 +49,11 @@ def insert_concatenation(expression): #Función insert_concatenation para poder 
 
 def shunting_yard(expression): #Función para realizar el algoritmo shunting yard.
      if '+' in expression:
-         expression = kleene_closure(expression)
-     if '?' in expression:
-        new_expression = question_mark(expression)
+         new_expression = kleene_closure(expression)
 
+     if '?' in expression:
+         new_expression = question_mark(expression)
+     
      precedence = {'#': 1, '|': 1, '.': 2, '*': 3, '+': 3, '?':3} # Orden de precedencia entre operadores.
 
      output_queue = [] #Lista de salida como notación postfix.
@@ -112,11 +100,11 @@ def shunting_yard(expression): #Función para realizar el algoritmo shunting yar
          return ''.join(output_queue)
 
 def question_mark(expression):
-    stack= []
+    if not expression or not expression[0].isalnum():
+        raise Exception("Expresión regular inválida. Operador '?' sin símbolo alfanumérico o al principio de la expresión.")
+    stack = []
     groups = ""
-    in_group = ''
-    if '+' in expression:
-        expression = kleene_closure(expression)
+    in_group = ""
     for ch in expression:
         if ch in "{([":
             groups += ch
@@ -124,20 +112,25 @@ def question_mark(expression):
             groups = groups[:-1]
             if len(groups) == 0:
                 in_group = in_group[1:]
-                notQuestioned = question_mark(in_group)
-                stack.append('('+notQuestioned+')')
+                not_questioned = question_mark(in_group)
+                stack.append("(" + not_questioned + ")")
                 continue
         if len(groups) != 0:
-            in_group +=ch
+            in_group += ch
         else:
-            if ch == '?':
-                toOperated = stack.pop()
-                stack.append('('+toOperated+'|ε)')
+            if ch == "?":
+                to_operated = stack.pop()
+                stack.append("(" + to_operated + "|ε)")
+            elif ch == "+":
+                to_operated = stack.pop()
+                stack.append("(" + to_operated + to_operated + "*)")
             else:
                 stack.append(ch)
-    return ''.join(stack)
+    return "".join(stack)
 
 def kleene_closure(expression):
+    if not expression or not expression[0].isalnum():
+        raise Exception("Expresión regular inválida. Operador '+' sin símbolo alfanumérico o al principio de la expresión.")
     i = 0
     new_expression = ''
     while i < len(expression):
@@ -164,8 +157,27 @@ class Tree_node:
         self.value = value
 
 def regex_to_afn(regex, index=0):
+    if not regex or all(char in '+*|.?()' for char in regex):
+        raise Exception("Expresión regular inválida")
     # Convertir la expresión regular a notación postfix
     postfix = shunting_yard(regex) # Expresión regular en notación postfix
+
+    unary_operators = ['*', '+', '?']
+    if postfix and postfix[0] in unary_operators:
+        raise Exception("Expresión regular inválida. Operador unario al principio sin símbolo o expresión.")
+
+    # Verificar paréntesis sin cerrar o paréntesis solitarios
+    parentheses_stack = []
+    for char in postfix:
+        if char == '(':
+            parentheses_stack.append(char)
+        elif char == ')':
+            if not parentheses_stack:
+                raise Exception("Expresión regular inválida. Falta paréntesis de apertura.")
+            parentheses_stack.pop()
+
+    if parentheses_stack:
+        raise Exception("Expresión regular inválida. Falta paréntesis de cierre.")
 
     # Inicialización de variables
     stack = []  # Pila para mantener un seguimiento de los estados
@@ -181,6 +193,7 @@ def regex_to_afn(regex, index=0):
     afn.add_edge(state_count, epsilon_state, label='ε')  # Transición épsilon desde el estado inicial
     print("Transicion inicial ", state_count, " ", epsilon_state)
     state_count += 1
+    alnum_counter = 0
 
     for symbol in postfix:
         if symbol == '.':
@@ -880,7 +893,11 @@ if __name__ == "__main__":
     postfix_expression = shunting_yard(regex) 
     print("Postfix expression:", postfix_expression) 
 
-    afn, accept_state = regex_to_afn(regex, 0)
+    try:
+        afn, accept_state = regex_to_afn(regex, 0)
+    except Exception as e:
+        print("Error: ", str(e))
+        sys.exit(1)
 
     # Obtener el conjunto de símbolos
     simbolos = set(label for _, _, label in afn.edges(data='label'))

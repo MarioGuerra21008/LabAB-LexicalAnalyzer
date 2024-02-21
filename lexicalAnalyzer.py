@@ -105,7 +105,7 @@ def question_mark(expression):
     stack = []
     groups = ""
     in_group = ""
-    for ch in expression:
+    for i, ch in enumerate(expression):
         if ch in "{([":
             groups += ch
         elif ch in "})]":
@@ -119,8 +119,13 @@ def question_mark(expression):
             in_group += ch
         else:
             if ch == "?":
-                to_operated = stack.pop()
-                stack.append("(" + to_operated + "|ε)")
+                if i == len(expression) - 1:
+                    to_operated = stack.pop()
+                    stack.append("(" + to_operated + "|ε)")
+                else:
+                    to_operated = stack.pop()
+                    stack.append("(" + to_operated + "|ε)")
+                    stack.append(to_operated)
             elif ch == "+":
                 to_operated = stack.pop()
                 stack.append("(" + to_operated + to_operated + "*)")
@@ -230,6 +235,8 @@ def regex_to_afn(regex, index=0):
             afnDx.add_edge(actual_state, left_cont+1, label='ε')
             afnDx.add_edge(left_cont, right_cont+1, label='ε')
             afnDx.add_edge(right_cont, right_cont+1, label='ε')
+            afnDx.add_edge(left_cont, right_cont-1, label='ε')
+            afnDx.add_edge(left_cont, left_cont-1, label='ε')
             actual_state = right_cont+1
         elif treeNode.value == '*':
             left_cont = recorrer_Tree_to_make_afn(treeNode.left, afnDx, actual_state + 1)
